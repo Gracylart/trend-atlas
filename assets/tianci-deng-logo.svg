@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 56" role="img" aria-label="Tianci Deng">
+  <title>Tianci Deng</title>
+  <!-- Monogram -->
+  <rect x="1" y="1" width="54" height="54" fill="none" stroke="#E8E4DC" stroke-width="1.2"/>
+  <text x="28" y="36" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="22" letter-spacing="0.08em" fill="#E8E4DC">TD</text>
+  <!-- Wordmark -->
+  <text x="68" y="28" font-family="Georgia, 'Times New Roman', serif" font-size="16" letter-spacing="0.28em" fill="#E8E4DC">TIANCI DENG</text>
+  <text x="68" y="44" font-family="Helvetica, Arial, sans-serif" font-size="8" letter-spacing="0.22em" fill="#9A958C">AUTHOR · FASHION &amp; TEXTILES</text>
+</svg>

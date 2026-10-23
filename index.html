@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TREND ATLAS — 时尚趋势图谱</title>
+  <meta name="description" content="AI Fashion Intelligence Platform — Demo Prototype" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=author-logo3" />
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+  <div class="scan-overlay" id="scanOverlay" aria-hidden="true"></div>
+  <span id="liveImgBadge" class="live-img-badge" hidden aria-live="polite">LOOKS · 0</span>
+
+  <!-- LANDING -->
+  <section id="landing" class="stage stage--landing">
+    <header class="top-bar">
+      <div class="brand-lockup">
+        <span class="logo">TREND ATLAS</span>
+        <span class="logo-zh">时尚趋势图谱</span>
+      </div>
+      <a class="author-logo" href="/author/" target="_blank" rel="noopener noreferrer" title="Tianci Deng — Author">
+        <img src="assets/tianci-deng-logo.svg" alt="Tianci Deng" width="168" height="34" />
+      </a>
+      <span class="demo-badge" id="apiBadge">DEMO</span>
+    </header>
+
+    <div class="landing-hero">
+      <p class="eyebrow">AI Fashion Intelligence Platform</p>
+      <h1 class="hero-title">
+        <span class="hero-line">TREND</span>
+        <span class="hero-line hero-line--accent">ATLAS</span>
+      </h1>
+      <p class="hero-sub">从一句话，映射一整季的视觉趋势图谱</p>
+
+      <form id="searchForm" class="search-form" autocomplete="off">
+        <label class="sr-only" for="searchInput">趋势查询</label>
+        <div class="search-shell">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="SS27 Experimental Womenswear"
+            value=""
+          />
+          <button type="submit" class="search-btn" aria-label="开始分析">
+            <span>分析</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+
+      <div id="parseChips" class="parse-chips" hidden aria-live="polite"></div>
+
+      <aside id="facetPanel" class="facet-panel" aria-label="多维筛选 Taxonomy">
+        <div class="facet-panel-head">
+          <span class="facet-eyebrow">TAXONOMY · 五维筛选</span>
+          <button type="button" class="btn-text facet-clear" id="facetClear" hidden>清除</button>
+        </div>
+        <p class="facet-query-preview" id="facetQueryPreview" hidden></p>
+        <div id="facetLayers" class="facet-layers"><!-- filled by app.js --></div>
+        <button type="button" class="facet-search-btn" id="facetSearchBtn" hidden>用所选维度搜索</button>
+      </aside>
+
+      <div class="preset-chips" id="presetChips">
+        <button type="button" class="preset-chip" data-q="SS27 Womenswear">
+          <span class="chip-cat">季节趋势</span>
+          <span class="chip-q">SS27 Womenswear</span>
+          <span class="chip-desc">春夏女装的流行方向</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Women's Leather Jacket">
+          <span class="chip-cat">品类趋势</span>
+          <span class="chip-q">Women's Leather Jacket</span>
+          <span class="chip-desc">女式皮夹克的款式与细节</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Innovative Knitwear">
+          <span class="chip-cat">面料研究</span>
+          <span class="chip-q">Innovative Knitwear</span>
+          <span class="chip-desc">创新针织面料与结构</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Asymmetric Hemline">
+          <span class="chip-cat">设计细节</span>
+          <span class="chip-q">Asymmetric Hemline</span>
+          <span class="chip-desc">不对称下摆的设计案例</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Futuristic Minimalism">
+          <span class="chip-cat">风格研究</span>
+          <span class="chip-q">Futuristic Minimalism</span>
+          <span class="chip-desc">未来主义极简风格</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="SS27 Colour Trends">
+          <span class="chip-cat">色彩趋势</span>
+          <span class="chip-q">SS27 Colour Trends</span>
+          <span class="chip-desc">相关色彩及其应用</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Acne Studios SS27">
+          <span class="chip-cat">品牌研究</span>
+          <span class="chip-q">Acne Studios SS27</span>
+          <span class="chip-desc">品牌系列与设计语言</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Trending Women's Trousers">
+          <span class="chip-cat">市场研究</span>
+          <span class="chip-q">Trending Women's Trousers</span>
+          <span class="chip-desc">女裤市场中的相关款式</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Experimental Textiles">
+          <span class="chip-cat">材料创新</span>
+          <span class="chip-q">Experimental Textiles</span>
+          <span class="chip-desc">实验性纺织材料</span>
+        </button>
+        <button type="button" class="preset-chip" data-q="Gen Z Fashion Trends">
+          <span class="chip-cat">消费趋势</span>
+          <span class="chip-q">Gen Z Fashion Trends</span>
+          <span class="chip-desc">年轻消费群体的时尚倾向</span>
+        </button>
+      </div>
+    </div>
+
+    <footer class="landing-foot">
+      <a class="author-credit" href="/author/" target="_blank" rel="noopener noreferrer">
+        <img src="assets/tianci-deng-logo.svg" alt="" width="140" height="28" aria-hidden="true" />
+        <span>Author · Tianci Deng</span>
+      </a>
+      <span id="landingFootNote">演示数据 · Demo imagery via picsum.photos</span>
+    </footer>
+  </section>
+
+  <!-- PHASE 1: SCAN -->
+  <section id="phaseScan" class="stage stage--scan" hidden>
+    <div class="scan-header">
+      <div class="scan-brand">
+        <span>TREND ATLAS</span>
+        <span class="dim">/</span>
+        <span>INTELLIGENCE ENGINE</span>
+      </div>
+      <span class="live-img-badge live-img-badge--inline" data-live-badge-mirror></span>
+      <button type="button" class="btn-ghost" id="btnAbortScan" title="返回">✕</button>
+    </div>
+
+    <div class="search-elevated" id="searchElevated">
+      <span class="query-label">QUERY</span>
+      <span class="query-text" id="queryDisplay"></span>
+      <div id="parseChipsScan" class="parse-chips parse-chips--scan" hidden aria-live="polite"></div>
+    </div>
+
+    <div class="phase-status" id="phaseStatus">
+      <span class="status-step is-active" data-step="collecting">COLLECTING</span>
+      <span class="status-sep">·</span>
+      <span class="status-step" data-step="analysing">ANALYSING</span>
+      <span class="status-sep">·</span>
+      <span class="status-step" data-step="mapping">MAPPING</span>
+      <span class="status-sep">·</span>
+      <span class="status-step" data-step="generating">GENERATING</span>
+    </div>
+
+    <div class="scan-wall" id="scanWall">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="scan-line" id="scanLine" aria-hidden="true"></div>
+  </section>
+
+  <!-- PHASE 2: 3D DISCOVERY -->
+  <section id="phaseDiscovery" class="stage stage--discovery" hidden>
+    <div class="discovery-header">
+      <div class="scan-brand">
+        <span>VISUAL DISCOVERY</span>
+        <span class="dim">/</span>
+        <span>CLUSTERING</span>
+      </div>
+      <span class="live-img-badge live-img-badge--inline" data-live-badge-mirror></span>
+      <p class="discovery-hint" id="discoveryHint">正在映射视觉关联…</p>
+    </div>
+
+    <div class="discovery-viewport" id="discoveryViewport">
+      <div class="discovery-space" id="discoverySpace">
+        <!-- 3D cards filled by JS -->
+      </div>
+    </div>
+
+    <div class="cluster-labels" id="clusterLabels" hidden>
+      <span data-cluster="silhouette">SILHOUETTE</span>
+      <span data-cluster="material">MATERIAL</span>
+      <span data-cluster="structure">STRUCTURE</span>
+      <span data-cluster="colour">COLOUR</span>
+    </div>
+  </section>
+
+  <!-- PHASE 3: REPORT -->
+  <section id="phaseReport" class="stage stage--report" hidden>
+    <article class="report" id="reportArticle">
+      <header class="report-masthead">
+        <div class="mast-left">
+          <span class="issue">TREND ATLAS · REPORT</span>
+          <h2 class="report-title" id="reportTitle">SS27 Experimental Womenswear</h2>
+          <p class="report-dek" id="reportDek">实验性女装轮廓与材质重构的季节映射</p>
+        </div>
+        <div class="mast-right">
+          <span class="meta-line">SEASON / SS27</span>
+          <span class="meta-line">FOCUS / WOMENSWEAR</span>
+          <span class="meta-line" id="reportSourcesMeta">SOURCES / —</span>
+          <button type="button" class="btn-text" id="btnNewSearch">新查询</button>
+        </div>
+      </header>
+
+      <div class="report-body">
+        <!-- A. Trend Overview -->
+        <section class="report-section report-enter" id="sectionOverview">
+          <header class="section-head">
+            <span class="section-eyebrow">TREND OVERVIEW</span>
+            <h3 class="section-title">趋势总览</h3>
+            <p class="section-note">仅从实时检索标题 / 摘要 / 图片题注提取 · 显示出现频率与来源覆盖 · 无证据则标「资料不足」</p>
+          </header>
+          <div class="overview-hero-strip" id="overviewHeroStrip" hidden></div>
+          <p class="overview-disclaimer evidence-disclaimer" id="overviewDisclaimer">以下为检索证据摘要，出现频率不等于市场主流或增长趋势。</p>
+          <ul class="overview-list" id="overviewList">
+            <!-- filled by buildTrendOverview -->
+          </ul>
+        </section>
+
+        <!-- B. Visual References -->
+        <section class="report-section report-enter" id="sectionVisuals">
+          <header class="section-head">
+            <span class="section-eyebrow">VISUAL REFERENCES</span>
+            <h3 class="section-title">视觉参考</h3>
+          </header>
+          <div class="visual-tabs" id="visualTabs" role="tablist"></div>
+          <div class="visual-panels" id="visualPanels"></div>
+        </section>
+
+        <!-- C. Key Findings -->
+        <section class="report-section report-enter" id="sectionFindings">
+          <header class="section-head">
+            <span class="section-eyebrow">KEY FINDINGS</span>
+            <h3 class="section-title">关键发现</h3>
+            <p class="section-note">出现频率来自检索文本 · 来源类型汇总见「来源覆盖」· 不等于市场主流</p>
+          </header>
+          <div class="findings-groups" id="findingsGroups"></div>
+        </section>
+
+        <!-- D. Related Searches -->
+        <section class="report-section report-enter" id="sectionRelated">
+          <header class="section-head">
+            <span class="section-eyebrow">RELATED SEARCHES</span>
+            <h3 class="section-title">关联搜索</h3>
+            <p class="section-note"><span class="badge-ev">来自资料</span> 证据词 · <span class="badge-ext">延伸</span> 查询扩展</p>
+          </header>
+          <div class="related-chips" id="relatedChips"></div>
+        </section>
+
+        <!-- Optional: core styles folded from live titles -->
+        <section class="report-core-styles report-enter" id="reportCoreStyles" hidden>
+          <h3>核心款式 · 来自资料</h3>
+          <p class="core-styles-meta" id="coreStylesMeta"></p>
+          <ul class="core-styles-list" id="coreStylesList"></ul>
+        </section>
+      </div>
+
+      <!-- ARCHIVE WATERFALL (before sources) -->
+      <section id="phaseArchive" class="stage stage--archive report-enter" hidden>
+        <header class="archive-header">
+          <div>
+            <span class="eyebrow">VISUAL REFERENCES</span>
+            <h2 class="archive-title">Trend Archive</h2>
+            <p class="archive-sub" id="archiveSub">相关视觉瀑布流 · Demo imagery</p>
+          </div>
+          <button type="button" class="btn-ghost" id="btnBackTop">↑ 返回报告</button>
+        </header>
+
+        <div class="archive-grid" id="archiveGrid">
+          <!-- columns filled by JS -->
+        </div>
+      </section>
+
+      <div class="report-cta report-enter">
+        <p>向下滚动查看新闻与来源链接</p>
+        <span class="scroll-hint">↓ 来源链接</span>
+      </div>
+
+      <section class="report-sources report-enter" id="reportSources" hidden>
+          <div class="sources-block" id="sourcesRssBlock" hidden>
+            <h3>Sources · 时尚媒体</h3>
+            <p class="sources-meta" id="sourcesMeta"></p>
+            <ul class="sources-list" id="sourcesList"></ul>
+          </div>
+          <div class="sources-block" id="sourcesWebBlock" hidden>
+            <h3>Sources · Web</h3>
+            <p class="sources-meta" id="sourcesWebMeta"></p>
+            <ul class="sources-list" id="sourcesWebList"></ul>
+          </div>
+      </section>
+    </article>
+  </section>
+
+  <!-- IMAGE DETAIL OVERLAY -->
+  <div id="detailOverlay" class="detail-overlay" hidden>
+    <button type="button" class="detail-close" id="detailClose" aria-label="关闭">✕</button>
+    <div class="detail-frame">
+      <div class="detail-scan" id="detailScan"></div>
+      <img id="detailImg" src="" alt="Selected garment (demo)" />
+      <div class="detail-tags" id="detailTags"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script src="app.js?v=no-per-source1"></script>
+</body>
+</html>
