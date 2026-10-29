@@ -2972,20 +2972,50 @@
     return `assets/orbit-silhouettes/${id}.svg`;
   }
 
+  function makeSoftDiscTexture(size, inner, mid) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, `rgba(255,250,240,${inner})`);
+    g.addColorStop(0.35, `rgba(232,224,212,${mid})`);
+    g.addColorStop(0.7, "rgba(232,224,212,0.08)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    const t = new THREE.CanvasTexture(c);
+    t.needsUpdate = true;
+    return t;
+  }
+
   function makeFrameTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, 256, 512);
-    ctx.fillStyle = "rgba(232, 223, 208, 0.045)";
-    ctx.fillRect(26, 36, 204, 440);
-    ctx.strokeStyle = "rgba(232, 223, 208, 0.5)";
+    // Soft cream fill
+    ctx.fillStyle = "rgba(232, 224, 212, 0.055)";
+    ctx.fillRect(24, 32, 208, 448);
+    // Sharp outer corners (crisp 1px + bright edge)
+    ctx.strokeStyle = "rgba(232, 224, 212, 0.72)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(24.5, 32.5, 207, 447);
+    // Corner ticks for Atelier wireframe feel
+    ctx.strokeStyle = "rgba(255, 248, 235, 0.85)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(26.5, 36.5, 203, 439);
-    ctx.strokeStyle = "rgba(232, 223, 208, 0.14)";
+    const tick = 16;
+    const x0 = 24, y0 = 32, x1 = 232, y1 = 480;
+    [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]].forEach(([x, y, sx, sy]) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y + sy * tick);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + sx * tick, y);
+      ctx.stroke();
+    });
+    ctx.strokeStyle = "rgba(232, 224, 212, 0.16)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(38.5, 48.5, 179, 415);
+    ctx.strokeRect(36.5, 44.5, 183, 423);
     const tex = new THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
@@ -3186,58 +3216,142 @@
     const root = new THREE.Group();
     scene.add(root);
 
-    // Starfield + twinkle metadata
+    // Soft disc maps for cream glow / bokeh
+    const softTiny = makeSoftDiscTexture(64, 0.95, 0.45);
+    const softBokeh = makeSoftDiscTexture(128, 0.7, 0.28);
+    const softNucleus = makeSoftDiscTexture(64, 1.0, 0.55);
+
+    // Dense starfield + larger bokeh layer
     let starPoints = null;
-    let starBaseOpacity = 0.48;
+    let bokehPoints = null;
+    let starBaseOpacity = 0.52;
     {
-      const count = 1400;
+      const count = 2200;
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
-        const r = 15 + Math.random() * 45;
+        const r = 14 + Math.random() * 48;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);
         pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.48;
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.5;
         pos[i * 3 + 2] = r * Math.cos(phi);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      const mat = new THREE.PointsMaterial({
-        color: 0xe8dfd0,
-        size: 0.03,
-        transparent: true,
-        opacity: starBaseOpacity,
-        depthWrite: false,
-        sizeAttenuation: true,
-      });
-      starPoints = new THREE.Points(geo, mat);
+      starPoints = new THREE.Points(
+        geo,
+        new THREE.PointsMaterial({
+          color: 0xe8e0d4,
+          map: softTiny,
+          size: 0.055,
+          transparent: true,
+          opacity: starBaseOpacity,
+          depthWrite: false,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+        })
+      );
       scene.add(starPoints);
+
+      const bCount = 280;
+      const bPos = new Float32Array(bCount * 3);
+      for (let i = 0; i < bCount; i++) {
+        const r = 10 + Math.random() * 28;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        bPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        bPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.55;
+        bPos[i * 3 + 2] = r * Math.cos(phi);
+      }
+      const bGeo = new THREE.BufferGeometry();
+      bGeo.setAttribute("position", new THREE.BufferAttribute(bPos, 3));
+      bokehPoints = new THREE.Points(
+        bGeo,
+        new THREE.PointsMaterial({
+          color: 0xe8e0d4,
+          map: softBokeh,
+          size: 0.55,
+          transparent: true,
+          opacity: 0.22,
+          depthWrite: false,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+        })
+      );
+      scene.add(bokehPoints);
     }
 
-    // Nucleus denser
+    // Interactive nucleus (particle sphere)
     let nucleusMat = null;
+    let nucleusGlowMat = null;
+    let nucleusPoints = null;
+    let nucleusBase = null; // Float32Array rest positions
+    let nucleusPosAttr = null;
+    let nucleusHit = null; // invisible mesh for hover/click
+    const nucleusState = {
+      breath: 1,
+      breathTarget: 1,
+      swirl: 0,
+      swirlVel: 0,
+      flare: 0,
+      hover: false,
+      radius: 1.42,
+    };
     {
-      const count = 3200;
+      const count = 3800;
       const pos = new Float32Array(count * 3);
+      nucleusBase = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
         const theta = 2 * Math.PI * Math.random();
         const phi = Math.acos(2 * Math.random() - 1);
-        const r = 1.42 * Math.cbrt(Math.random());
-        pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        pos[i * 3 + 2] = r * Math.cos(phi);
+        const r = nucleusState.radius * Math.cbrt(Math.random());
+        const x = r * Math.sin(phi) * Math.cos(theta);
+        const y = r * Math.sin(phi) * Math.sin(theta);
+        const z = r * Math.cos(phi);
+        pos[i * 3] = nucleusBase[i * 3] = x;
+        pos[i * 3 + 1] = nucleusBase[i * 3 + 1] = y;
+        pos[i * 3 + 2] = nucleusBase[i * 3 + 2] = z;
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      nucleusPosAttr = geo.attributes.position;
       nucleusMat = new THREE.PointsMaterial({
-        color: 0xe8dfd0,
-        size: 0.024,
+        color: 0xe8e0d4,
+        map: softNucleus,
+        size: 0.048,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.92,
         depthWrite: false,
         sizeAttenuation: true,
+        blending: THREE.AdditiveBlending,
       });
-      root.add(new THREE.Points(geo, nucleusMat));
+      nucleusPoints = new THREE.Points(geo, nucleusMat);
+      root.add(nucleusPoints);
+
+      // Soft bloom halo around sphere
+      nucleusGlowMat = new THREE.SpriteMaterial({
+        map: softBokeh,
+        color: 0xe8e0d4,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const halo = new THREE.Sprite(nucleusGlowMat);
+      halo.scale.set(4.2, 4.2, 1);
+      root.add(halo);
+
+      // Hit sphere for interaction (not visible)
+      nucleusHit = new THREE.Mesh(
+        new THREE.SphereGeometry(1.55, 24, 24),
+        new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        })
+      );
+      nucleusHit.userData.isNucleus = true;
+      root.add(nucleusHit);
     }
 
     addWireCage(root, 3.4, 4.8);
@@ -3545,18 +3659,25 @@
           leaderLines.push(line);
         });
 
-        // Arcs into particle sphere (nucleus)
-        for (let i = 0; i < 5; i++) {
+        // Pulling leader lines INTO the sphere (relational)
+        for (let i = 0; i < 10; i++) {
           const end = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.6,
-            (Math.random() - 0.5) * 0.6,
-            (Math.random() - 0.5) * 0.6
+            (Math.random() - 0.5) * 0.35,
+            (Math.random() - 0.5) * 0.35,
+            (Math.random() - 0.5) * 0.35
           );
-          const mid = local.clone().multiplyScalar(0.45);
-          mid.y += (i - 2) * 0.12;
-          const geo = new THREE.BufferGeometry().setFromPoints([local.clone(), mid, end]);
+          const mid = local.clone().lerp(end, 0.4);
+          mid.y += Math.sin(i) * 0.22;
+          mid.x += Math.cos(i * 1.3) * 0.15;
+          const mid2 = local.clone().lerp(end, 0.72);
+          const geo = new THREE.BufferGeometry().setFromPoints([
+            local.clone(),
+            mid,
+            mid2,
+            end,
+          ]);
           const mat = new THREE.LineBasicMaterial({
-            color: 0xe8dfd0,
+            color: 0xe8e0d4,
             transparent: true,
             opacity: 0,
           });
@@ -3565,14 +3686,19 @@
           sphereArcs.push(line);
         }
 
+        // Kick sphere flare / densify toward selection
+        nucleusState.flare = 1;
+        nucleusState.swirlVel += 0.35;
+        nucleusState.breathTarget = 1.28;
+
         // Camera ease toward selection
         const camTarget = camHome.clone();
         const toSel = worldPos.clone().normalize().multiplyScalar(0.55);
         camTarget.add(toSel);
-        camTarget.z = Math.max(6.2, camTarget.z - 0.45);
+        camTarget.z = Math.max(6.05, camTarget.z - 0.55);
         const camFrom = camera.position.clone();
 
-        const dur = 1200;
+        const dur = 1300;
         const t0 = performance.now();
         function step(now) {
           if (!orbitState) {
@@ -3610,7 +3736,14 @@
           camera.position.lerpVectors(camFrom, camTarget, e * 0.85);
           camera.lookAt(0, 0.12, 0);
 
-          if (nucleusMat) nucleusMat.opacity = 0.9 + pulse * 0.1;
+          if (nucleusMat) {
+            nucleusMat.opacity = 0.85 + pulse * 0.15;
+            nucleusMat.size = 0.045 + pulse * 0.04;
+          }
+          if (nucleusGlowMat) nucleusGlowMat.opacity = 0.3 + pulse * 0.55;
+          nucleusState.breath = 1 + pulse * 0.32;
+          nucleusState.flare = pulse;
+
 
           if (t < 1) requestAnimationFrame(step);
           else resolve();
@@ -3637,6 +3770,7 @@
       dragging: false,
       dragMoved: false,
       selecting: false,
+      onNucleus: false,
       lastX: 0,
       hoverCat: null,
       raf: 0,
@@ -3660,13 +3794,52 @@
     resize();
     window.addEventListener("resize", resize);
 
-    function pickHit(e) {
+    function setPointerFromEvent(e) {
       const rect = canvas.getBoundingClientRect();
       state.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       state.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       state.raycaster.setFromCamera(state.pointer, camera);
+    }
+
+    function pickHit(e) {
+      setPointerFromEvent(e);
       const hits = state.raycaster.intersectObjects(state.slabMeshes, false);
       return hits.length ? hits[0].object : null;
+    }
+
+    function pickNucleus(e) {
+      if (!nucleusHit) return false;
+      setPointerFromEvent(e);
+      const hits = state.raycaster.intersectObject(nucleusHit, false);
+      return hits.length > 0;
+    }
+
+    async function playNucleusTapFx() {
+      setOrbitHud({ zh: "趋势核心", en: "Trend Nucleus" });
+      nucleusState.flare = 1;
+      nucleusState.breathTarget = 1.35;
+      nucleusState.swirlVel += 0.5;
+      const dur = 900;
+      const t0 = performance.now();
+      await new Promise((resolve) => {
+        function step(now) {
+          if (!orbitState) {
+            resolve();
+            return;
+          }
+          const t = Math.min(1, (now - t0) / dur);
+          const pulse = Math.sin(t * Math.PI);
+          nucleusState.flare = pulse;
+          if (nucleusGlowMat) nucleusGlowMat.opacity = 0.35 + pulse * 0.5;
+          if (t < 1) requestAnimationFrame(step);
+          else {
+            nucleusState.breathTarget = 1;
+            setOrbitHud(null);
+            resolve();
+          }
+        }
+        requestAnimationFrame(step);
+      });
     }
 
     state.onPointerDown = (e) => {
@@ -3674,6 +3847,7 @@
       state.dragging = true;
       state.dragMoved = false;
       state.lastX = e.clientX;
+      state.onNucleus = pickNucleus(e);
       stage.classList.add("is-dragging");
       try {
         canvas.setPointerCapture(e.pointerId);
@@ -3686,18 +3860,35 @@
         if (Math.abs(dx) > 2) state.dragMoved = true;
         state.lastX = e.clientX;
         state.targetAzimuth += dx * 0.0058;
+        // Angular momentum into sphere particles
+        nucleusState.swirlVel += dx * 0.0018;
+        if (state.onNucleus) nucleusState.swirlVel += dx * 0.0025;
         return;
       }
+      const onSphere = pickNucleus(e);
+      nucleusState.hover = onSphere;
+      nucleusState.breathTarget = onSphere ? 1.12 : 1.0;
       const hit = pickHit(e);
       const item = hit?.userData?.item || null;
       if (item !== state.hoverCat) {
         state.hoverCat = item;
-        setOrbitHud(item);
-        stage.style.cursor = item ? "pointer" : "grab";
+        if (item) setOrbitHud(item);
+        else if (onSphere) setOrbitHud({ zh: "趋势核心", en: "Trend Nucleus" });
+        else setOrbitHud(null);
+        stage.style.cursor = item || onSphere ? "pointer" : "grab";
+      } else if (!item) {
+        if (onSphere) {
+          setOrbitHud({ zh: "趋势核心", en: "Trend Nucleus" });
+          stage.style.cursor = "pointer";
+        } else {
+          setOrbitHud(null);
+          stage.style.cursor = "grab";
+        }
       }
     };
     state.onPointerUp = (e) => {
       state.dragging = false;
+      state.onNucleus = false;
       stage.classList.remove("is-dragging");
       try {
         canvas.releasePointerCapture(e.pointerId);
@@ -3706,6 +3897,8 @@
     state.onPointerLeave = () => {
       if (!state.selecting) {
         state.hoverCat = null;
+        nucleusState.hover = false;
+        nucleusState.breathTarget = 1;
         setOrbitHud(null);
         stage.style.cursor = "grab";
       }
@@ -3714,12 +3907,19 @@
       if (state.dragMoved || state.selecting) return;
       const hit = pickHit(e);
       const item = hit?.userData?.item;
-      if (!item) return;
-      state.selecting = true;
-      setOrbitHud(item);
-      await playSelectFx(hit);
-      if (!orbitState) return;
-      confirmOrbitCategory(item);
+      if (item) {
+        state.selecting = true;
+        setOrbitHud(item);
+        await playSelectFx(hit);
+        if (!orbitState) return;
+        confirmOrbitCategory(item);
+        return;
+      }
+      if (pickNucleus(e)) {
+        state.selecting = true;
+        await playNucleusTapFx();
+        state.selecting = false;
+      }
     };
 
     canvas.addEventListener("pointerdown", state.onPointerDown);
@@ -3729,22 +3929,74 @@
     canvas.addEventListener("pointerleave", state.onPointerLeave);
     canvas.addEventListener("click", state.onClick);
 
+    function updateNucleusParticles(elapsed) {
+      if (!nucleusPosAttr || !nucleusBase) return;
+      // Smooth breath toward target
+      nucleusState.breath += (nucleusState.breathTarget - nucleusState.breath) * 0.06;
+      // Swirl velocity decay with lag
+      nucleusState.swirl += nucleusState.swirlVel;
+      nucleusState.swirlVel *= 0.94;
+      const breath = nucleusState.breath + (nucleusState.flare || 0) * 0.2;
+      const swirl = nucleusState.swirl;
+      const arr = nucleusPosAttr.array;
+      const n = arr.length / 3;
+      for (let i = 0; i < n; i++) {
+        const bx = nucleusBase[i * 3];
+        const by = nucleusBase[i * 3 + 1];
+        const bz = nucleusBase[i * 3 + 2];
+        // rotate around Y with radius-dependent lag
+        const r2 = Math.sqrt(bx * bx + bz * bz) + 1e-5;
+        const lag = 0.55 + (r2 / (nucleusState.radius + 0.2)) * 0.9;
+        const a = swirl * lag * 0.35;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        let x = bx * ca - bz * sa;
+        let z = bx * sa + bz * ca;
+        let y = by;
+        // breathe outward
+        x *= breath;
+        y *= breath;
+        z *= breath;
+        // subtle idle noise
+        const wobble = Math.sin(elapsed * 1.8 + i * 0.01) * 0.012 * (1 + (nucleusState.flare || 0));
+        arr[i * 3] = x + wobble;
+        arr[i * 3 + 1] = y;
+        arr[i * 3 + 2] = z;
+      }
+      nucleusPosAttr.needsUpdate = true;
+    }
+
     function tick() {
       state.raf = requestAnimationFrame(tick);
       const elapsed = (performance.now() - state.t0) / 1000;
 
-      if (!state.dragging && !state.selecting) state.targetAzimuth += 0.0009;
+      if (!state.dragging && !state.selecting) state.targetAzimuth += 0.00075;
       state.azimuth += (state.targetAzimuth - state.azimuth) * 0.1;
       root.rotation.y = state.azimuth;
 
-      // Twinkle
+      // Twinkle / bokeh life
       if (starPoints?.material) {
-        starPoints.material.opacity = starBaseOpacity + Math.sin(elapsed * 1.6) * 0.08;
+        starPoints.material.opacity = starBaseOpacity + Math.sin(elapsed * 1.5) * 0.1;
       }
-      if (nucleusMat && !state.selecting) {
-        nucleusMat.opacity = 0.82 + Math.sin(elapsed * 2.1) * 0.08;
-        nucleusMat.size = 0.022 + Math.sin(elapsed * 1.4) * 0.004;
+      if (bokehPoints?.material) {
+        bokehPoints.material.opacity = 0.16 + Math.sin(elapsed * 0.9 + 1.2) * 0.07;
+        bokehPoints.rotation.y = elapsed * 0.02;
       }
+
+      if (!state.selecting) {
+        // Idle breath when hovering sphere
+        if (!nucleusState.hover && Math.abs(nucleusState.swirlVel) < 0.002) {
+          nucleusState.breathTarget = 1 + Math.sin(elapsed * 1.25) * 0.035;
+        }
+        if (nucleusMat) {
+          nucleusMat.opacity = 0.78 + Math.sin(elapsed * 2.0) * 0.1 + (nucleusState.hover ? 0.08 : 0);
+          nucleusMat.size = 0.042 + Math.sin(elapsed * 1.5) * 0.008 + (nucleusState.hover ? 0.01 : 0);
+        }
+        if (nucleusGlowMat) {
+          nucleusGlowMat.opacity = 0.28 + Math.sin(elapsed * 1.1) * 0.08 + (nucleusState.hover ? 0.12 : 0);
+        }
+      }
+      updateNucleusParticles(elapsed);
 
       if (!state.selecting) {
         slabMeshes.forEach((hit) => {
@@ -3752,18 +4004,19 @@
           if (!g) return;
           g.getWorldPosition(tmpWorld);
           const dist = tmpWorld.distanceTo(camera.position);
-          const near = 4.0;
-          const far = 11.0;
+          const near = 3.8;
+          const far = 11.5;
           const t = Math.max(0, Math.min(1, (dist - near) / (far - near)));
           const front = 1 - t;
+          // Shallow DOF / depth falloff — back dims + softens
           const bs = hit.userData.baseSil ?? 0.9;
           const bf = hit.userData.baseFrame ?? 0.8;
           const bw = hit.userData.baseWire ?? 0.35;
-          if (hit.userData.silMat) hit.userData.silMat.opacity = bs * (0.35 + front * 0.65);
-          if (hit.userData.frameMat) hit.userData.frameMat.opacity = bf * (0.3 + front * 0.7);
+          if (hit.userData.silMat) hit.userData.silMat.opacity = bs * (0.22 + front * 0.78);
+          if (hit.userData.frameMat) hit.userData.frameMat.opacity = bf * (0.18 + front * 0.82);
           if (hit.userData.wire?.material)
-            hit.userData.wire.material.opacity = bw * (0.25 + front * 0.75);
-          const sc = 0.84 + front * 0.2;
+            hit.userData.wire.material.opacity = bw * (0.15 + front * 0.85);
+          const sc = 0.78 + front * 0.28;
           g.scale.set(sc, sc, sc);
         });
       }
