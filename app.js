@@ -2913,38 +2913,56 @@
     }
   }
 
-  function makeSlabTexture(zh, en) {
+  function silhouetteUrl(id) {
+    return `assets/orbit-silhouettes/${id}.svg`;
+  }
+
+  function makeFrameTexture() {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, 256, 512);
-    // translucent cream panel
-    ctx.fillStyle = "rgba(232, 223, 208, 0.06)";
-    ctx.fillRect(24, 48, 208, 416);
+    ctx.fillStyle = "rgba(232, 223, 208, 0.05)";
+    ctx.fillRect(28, 40, 200, 432);
     ctx.strokeStyle = "rgba(232, 223, 208, 0.55)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(24.5, 48.5, 207, 415);
-    // inner hairline
-    ctx.strokeStyle = "rgba(232, 223, 208, 0.18)";
+    ctx.strokeRect(28.5, 40.5, 199, 431);
+    ctx.strokeStyle = "rgba(232, 223, 208, 0.16)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(36.5, 60.5, 183, 391);
-    // vertical label (rotated)
-    ctx.save();
-    ctx.translate(128, 256);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = "rgba(245, 240, 232, 0.95)";
-    ctx.font = "500 34px 'Cormorant Garamond', Georgia, serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(zh, 0, -10);
-    ctx.fillStyle = "rgba(245, 240, 232, 0.45)";
-    ctx.font = "400 14px Inter, system-ui, sans-serif";
-    ctx.fillText(en.toUpperCase(), 0, 28);
-    ctx.restore();
+    ctx.strokeRect(40.5, 52.5, 175, 407);
     const tex = new THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
+  }
+
+  function loadSilhouetteTexture(cat) {
+    return new Promise((resolve) => {
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        silhouetteUrl(cat.id),
+        (tex) => {
+          if ("SRGBColorSpace" in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+          tex.needsUpdate = true;
+          resolve(tex);
+        },
+        undefined,
+        () => {
+          // Fallback: cream abstract mark if SVG missing
+          const c = document.createElement("canvas");
+          c.width = 256;
+          c.height = 512;
+          const ctx = c.getContext("2d");
+          ctx.fillStyle = "rgba(232, 224, 212, 0.85)";
+          ctx.beginPath();
+          ctx.ellipse(128, 220, 48, 90, 0, 0, Math.PI * 2);
+          ctx.fill();
+          const t = new THREE.CanvasTexture(c);
+          t.needsUpdate = true;
+          resolve(t);
+        }
+      );
+    });
   }
 
   function disposeOrbit() {
@@ -2957,7 +2975,7 @@
       s.canvas.removeEventListener("pointermove", s.onPointerMove);
       s.canvas.removeEventListener("pointerup", s.onPointerUp);
       s.canvas.removeEventListener("pointercancel", s.onPointerUp);
-      s.canvas.removeEventListener("pointerleave", s.onPointerUp);
+      s.canvas.removeEventListener("pointerleave", s.onPointerLeave);
       s.canvas.removeEventListener("click", s.onClick);
     }
     if (s.renderer) {
@@ -2976,7 +2994,23 @@
         }
       });
     }
+    const hud = document.getElementById("orbitHud");
+    if (hud) hud.hidden = true;
     orbitState = null;
+  }
+
+  function setOrbitHud(cat) {
+    const hud = document.getElementById("orbitHud");
+    const zh = document.getElementById("orbitHudZh");
+    const en = document.getElementById("orbitHudEn");
+    if (!hud) return;
+    if (!cat) {
+      hud.hidden = true;
+      return;
+    }
+    if (zh) zh.textContent = cat.zh;
+    if (en) en.textContent = cat.en;
+    hud.hidden = false;
   }
 
   function buildOrbitFallback() {
@@ -2990,8 +3024,11 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.innerHTML =
+        `<img class="orbit-fallback-icon" src="${silhouetteUrl(cat.id)}" alt="" width="36" height="56" />` +
+        `<span class="orbit-fallback-text">` +
         `<span class="orbit-fallback-zh">${cat.zh}</span>` +
-        `<span class="orbit-fallback-en">${cat.en}</span>`;
+        `<span class="orbit-fallback-en">${cat.en}</span>` +
+        `</span>`;
       btn.addEventListener("click", () => confirmOrbitCategory(cat));
       li.appendChild(btn);
       list.appendChild(li);
@@ -3004,7 +3041,75 @@
     if (hint) hint.textContent = "点击品类开始搜索";
   }
 
-  function initOrbitScene() {
+  function addWireCage(root, radius, height) {
+    const cream = 0xe8dfd0;
+    // Concentric ellipse rings at several heights
+    const ringYs = [-height * 0.48, -height * 0.22, 0.05, height * 0.28, height * 0.48];
+    const ringRadii = [radius * 1.02, radius * 0.92, radius * 1.05, radius * 0.95, radius * 1.0];
+    ringYs.forEach((y, i) => {
+      const r = ringRadii[i];
+      const pts = [];
+      const seg = 64;
+      for (let s = 0; s <= seg; s++) {
+        const a = (s / seg) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      root.add(
+        new THREE.Line(
+          geo,
+          new THREE.LineBasicMaterial({
+            color: cream,
+            transparent: true,
+            opacity: i === 2 ? 0.32 : 0.16,
+          })
+        )
+      );
+    });
+    // Vertical guides
+    const guides = 18;
+    for (let i = 0; i < guides; i++) {
+      const a = (i / guides) * Math.PI * 2;
+      const x = Math.cos(a) * radius;
+      const z = Math.sin(a) * radius;
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x, -height * 0.5, z),
+        new THREE.Vector3(x, height * 0.5, z),
+      ]);
+      root.add(
+        new THREE.Line(
+          geo,
+          new THREE.LineBasicMaterial({
+            color: cream,
+            transparent: true,
+            opacity: 0.1,
+          })
+        )
+      );
+    }
+    // Outer thin cylinder edges
+    const cyl = new THREE.CylinderGeometry(radius * 1.08, radius * 1.08, height * 1.05, 48, 1, true);
+    root.add(
+      new THREE.LineSegments(
+        new THREE.EdgesGeometry(cyl, 12),
+        new THREE.LineBasicMaterial({ color: cream, transparent: true, opacity: 0.14 })
+      )
+    );
+  }
+
+  function makeWireSlab(w, h, opacity) {
+    const box = new THREE.BoxGeometry(w, h, 0.03);
+    return new THREE.LineSegments(
+      new THREE.EdgesGeometry(box),
+      new THREE.LineBasicMaterial({
+        color: 0xe8dfd0,
+        transparent: true,
+        opacity: opacity,
+      })
+    );
+  }
+
+  async function initOrbitScene() {
     const canvas = document.getElementById("orbitCanvas");
     const stage = document.getElementById("orbitStage");
     const azimuthEl = document.getElementById("orbitAzimuth");
@@ -3015,12 +3120,15 @@
     }
     if (fallback) fallback.hidden = true;
     canvas.style.display = "block";
+    stage.style.cursor = "grab";
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.035);
+    scene.fog = new THREE.FogExp2(0x000000, 0.048);
 
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
-    camera.position.set(0, 0.35, 9.2);
+    // Stronger perspective — FOV + closer camera so ring wraps sphere
+    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 140);
+    camera.position.set(0, 0.55, 7.6);
+    camera.lookAt(0, 0.1, 0);
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -3036,109 +3144,361 @@
 
     // Starfield
     {
-      const count = 900;
+      const count = 1100;
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
-        const r = 18 + Math.random() * 40;
+        const r = 16 + Math.random() * 42;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);
         pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.55;
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.5;
         pos[i * 3 + 2] = r * Math.cos(phi);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      const mat = new THREE.PointsMaterial({
-        color: 0xe8dfd0,
-        size: 0.035,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-        sizeAttenuation: true,
-      });
-      scene.add(new THREE.Points(geo, mat));
+      scene.add(
+        new THREE.Points(
+          geo,
+          new THREE.PointsMaterial({
+            color: 0xe8dfd0,
+            size: 0.032,
+            transparent: true,
+            opacity: 0.5,
+            depthWrite: false,
+            sizeAttenuation: true,
+          })
+        )
+      );
     }
 
-    // Nucleus particle sphere
+    // Nucleus
     {
-      const count = 2200;
+      const count = 2600;
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
-        const u = Math.random();
-        const v = Math.random();
-        const theta = 2 * Math.PI * u;
-        const phi = Math.acos(2 * v - 1);
-        const r = 1.55 * Math.cbrt(Math.random());
+        const theta = 2 * Math.PI * Math.random();
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = 1.45 * Math.cbrt(Math.random());
         pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
         pos[i * 3 + 2] = r * Math.cos(phi);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      const mat = new THREE.PointsMaterial({
-        color: 0xe8dfd0,
-        size: 0.028,
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        sizeAttenuation: true,
-      });
-      root.add(new THREE.Points(geo, mat));
-    }
-
-    // Soft wireframe cylinder
-    {
-      const cyl = new THREE.CylinderGeometry(3.55, 3.55, 3.4, 48, 1, true);
-      const edges = new THREE.EdgesGeometry(cyl, 18);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({
-          color: 0xe8dfd0,
-          transparent: true,
-          opacity: 0.18,
-        })
+      root.add(
+        new THREE.Points(
+          geo,
+          new THREE.PointsMaterial({
+            color: 0xe8dfd0,
+            size: 0.026,
+            transparent: true,
+            opacity: 0.88,
+            depthWrite: false,
+            sizeAttenuation: true,
+          })
+        )
       );
-      root.add(line);
     }
 
-    // Orbiting category slabs
+    const cageR = 3.35;
+    const cageH = 4.4;
+    addWireCage(root, cageR, cageH);
+
+    const frameTex = makeFrameTexture();
     const slabMeshes = [];
-    const radius = 3.55;
-    const n = ORBIT_CATEGORIES.length;
-    ORBIT_CATEGORIES.forEach((cat, i) => {
-      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-      const tex = makeSlabTexture(cat.zh, cat.en);
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.55), mat);
-      mesh.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-      mesh.lookAt(0, 0, 0);
-      mesh.rotateY(Math.PI); // face outward
-      mesh.userData.category = cat;
-      root.add(mesh);
-      slabMeshes.push(mesh);
+    const depthMats = []; // materials to fade by depth
+    const decoAnchors = []; // decorative nodes for leader lines
 
-      // thin wire box accent
-      const box = new THREE.BoxGeometry(0.74, 1.58, 0.04);
-      const wire = new THREE.LineSegments(
-        new THREE.EdgesGeometry(box),
-        new THREE.LineBasicMaterial({
-          color: 0xe8dfd0,
+    // --- Multi-tier category slabs (silhouette only) ---
+    const tiers = [
+      { y: 1.15, radius: 3.15, scale: 0.82, count: 5, phase: 0.12 },
+      { y: 0.05, radius: 3.45, scale: 1.0, count: 5, phase: 0.0 },
+      { y: -1.15, radius: 3.2, scale: 0.88, count: 4, phase: 0.22 },
+    ];
+
+    const texList = await Promise.all(ORBIT_CATEGORIES.map((c) => loadSilhouetteTexture(c)));
+    let catIdx = 0;
+
+    tiers.forEach((tier) => {
+      for (let i = 0; i < tier.count; i++) {
+        if (catIdx >= ORBIT_CATEGORIES.length) break;
+        const cat = ORBIT_CATEGORIES[catIdx];
+        const tex = texList[catIdx];
+        catIdx += 1;
+        const angle = (i / tier.count) * Math.PI * 2 - Math.PI / 2 + tier.phase;
+        const group = new THREE.Group();
+        const x = Math.cos(angle) * tier.radius;
+        const z = Math.sin(angle) * tier.radius;
+        group.position.set(x, tier.y, z);
+        group.lookAt(0, tier.y, 0);
+        group.rotateY(Math.PI);
+
+        const w = 0.7 * tier.scale;
+        const h = 1.45 * tier.scale;
+
+        const frameMat = new THREE.MeshBasicMaterial({
+          map: frameTex,
           transparent: true,
-          opacity: 0.35,
-        })
-      );
-      wire.position.copy(mesh.position);
-      wire.quaternion.copy(mesh.quaternion);
-      root.add(wire);
+          opacity: 0.85,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const frame = new THREE.Mesh(new THREE.PlaneGeometry(w, h), frameMat);
+        group.add(frame);
+
+        const silMat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.95,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const sil = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, h * 0.78), silMat);
+        sil.position.z = 0.02;
+        group.add(sil);
+
+        const wire = makeWireSlab(w * 1.02, h * 1.02, 0.4);
+        group.add(wire);
+
+        // Invisible hit plane (slightly larger)
+        const hitMat = new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const hit = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.15, h * 1.15), hitMat);
+        hit.position.z = 0.04;
+        hit.userData.category = cat;
+        hit.userData.slabGroup = group;
+        hit.userData.silMat = silMat;
+        hit.userData.frameMat = frameMat;
+        hit.userData.wire = wire;
+        group.add(hit);
+
+        root.add(group);
+        slabMeshes.push(hit);
+        depthMats.push({ mat: frameMat, base: 0.85 }, { mat: silMat, base: 0.95 });
+        decoAnchors.push(group);
+      }
     });
+
+    // Extra decorative empty wireframe slabs for density (not clickable)
+    const decoSpecs = [
+      { y: 1.85, radius: 2.9, n: 8, scale: 0.55, opacity: 0.22 },
+      { y: -1.85, radius: 2.95, n: 8, scale: 0.55, opacity: 0.2 },
+      { y: 0.55, radius: 3.85, n: 10, scale: 0.42, opacity: 0.16 },
+      { y: -0.55, radius: 3.9, n: 10, scale: 0.42, opacity: 0.14 },
+      { y: 0.0, radius: 2.55, n: 6, scale: 0.35, opacity: 0.12 },
+    ];
+    decoSpecs.forEach((spec) => {
+      for (let i = 0; i < spec.n; i++) {
+        const angle = (i / spec.n) * Math.PI * 2 + spec.y * 0.4;
+        const g = new THREE.Group();
+        const x = Math.cos(angle) * spec.radius;
+        const z = Math.sin(angle) * spec.radius;
+        g.position.set(x, spec.y, z);
+        g.lookAt(0, spec.y, 0);
+        g.rotateY(Math.PI);
+        const w = 0.55 * spec.scale;
+        const h = 1.15 * spec.scale;
+        const wire = makeWireSlab(w, h, spec.opacity);
+        g.add(wire);
+        // faint empty plane
+        const plane = new THREE.Mesh(
+          new THREE.PlaneGeometry(w * 0.92, h * 0.92),
+          new THREE.MeshBasicMaterial({
+            color: 0xe8dfd0,
+            transparent: true,
+            opacity: 0.03,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          })
+        );
+        g.add(plane);
+        root.add(g);
+        decoAnchors.push(g);
+      }
+    });
+
+    // Selection FX group (glow sprite, ring, leader lines)
+    const fxRoot = new THREE.Group();
+    root.add(fxRoot);
+
+    function makeGlowTexture() {
+      const c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext("2d");
+      const g = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
+      g.addColorStop(0, "rgba(255,248,235,0.95)");
+      g.addColorStop(0.25, "rgba(232,223,208,0.45)");
+      g.addColorStop(0.55, "rgba(232,223,208,0.12)");
+      g.addColorStop(1, "rgba(232,223,208,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 256, 256);
+      // diagonal flare streaks
+      ctx.save();
+      ctx.translate(128, 128);
+      ctx.rotate(-Math.PI / 5);
+      ctx.globalCompositeOperation = "lighter";
+      const streak = ctx.createLinearGradient(-120, 0, 120, 0);
+      streak.addColorStop(0, "rgba(255,250,240,0)");
+      streak.addColorStop(0.5, "rgba(255,250,240,0.55)");
+      streak.addColorStop(1, "rgba(255,250,240,0)");
+      ctx.fillStyle = streak;
+      ctx.fillRect(-120, -3, 240, 6);
+      ctx.rotate(Math.PI / 2.2);
+      ctx.fillRect(-90, -2, 180, 4);
+      ctx.restore();
+      const t = new THREE.CanvasTexture(c);
+      t.needsUpdate = true;
+      return t;
+    }
+
+    const glowTex = makeGlowTexture();
+    const glowMat = new THREE.SpriteMaterial({
+      map: glowTex,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const glowSprite = new THREE.Sprite(glowMat);
+    glowSprite.scale.set(2.4, 2.4, 1);
+    glowSprite.visible = false;
+    fxRoot.add(glowSprite);
+
+    // Focus ring (torus wire)
+    const ringGeo = new THREE.TorusGeometry(0.95, 0.012, 8, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xe8dfd0,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const focusRing = new THREE.Mesh(ringGeo, ringMat);
+    focusRing.visible = false;
+    fxRoot.add(focusRing);
+
+    // Secondary wire circle
+    const ring2 = new THREE.Mesh(
+      new THREE.TorusGeometry(1.15, 0.006, 6, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0xe8dfd0,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      })
+    );
+    ring2.visible = false;
+    fxRoot.add(ring2);
+
+    let leaderLines = [];
+
+    function clearLeaders() {
+      leaderLines.forEach((ln) => {
+        fxRoot.remove(ln);
+        ln.geometry?.dispose();
+        ln.material?.dispose();
+      });
+      leaderLines = [];
+    }
+
+    function playSelectFx(hitMesh) {
+      return new Promise((resolve) => {
+        const group = hitMesh.userData.slabGroup;
+        if (!group) {
+          resolve();
+          return;
+        }
+        const worldPos = new THREE.Vector3();
+        group.getWorldPosition(worldPos);
+        // convert to root-local
+        const local = worldPos.clone();
+        root.worldToLocal(local);
+
+        clearLeaders();
+        glowSprite.position.copy(local);
+        glowSprite.visible = true;
+        glowMat.opacity = 0;
+        focusRing.position.copy(local);
+        focusRing.lookAt(0, local.y, 0);
+        focusRing.visible = true;
+        ringMat.opacity = 0;
+        ring2.position.copy(local);
+        ring2.lookAt(0, local.y, 0);
+        ring2.visible = true;
+        ring2.material.opacity = 0;
+
+        // Brighten selected materials
+        if (hitMesh.userData.silMat) hitMesh.userData.silMat.opacity = 1;
+        if (hitMesh.userData.frameMat) hitMesh.userData.frameMat.opacity = 1;
+        if (hitMesh.userData.wire?.material) hitMesh.userData.wire.material.opacity = 0.95;
+
+        // Leader lines to nearest decorative anchors
+        const others = decoAnchors
+          .filter((a) => a !== group)
+          .map((a) => {
+            const p = new THREE.Vector3();
+            a.getWorldPosition(p);
+            root.worldToLocal(p);
+            return { a, p, d: p.distanceTo(local) };
+          })
+          .sort((a, b) => a.d - b.d)
+          .slice(0, 6);
+
+        others.forEach((o, i) => {
+          // slight diagonal offset mid-point for web feel
+          const mid = local.clone().lerp(o.p, 0.5);
+          mid.y += (i % 2 === 0 ? 0.25 : -0.2) * (0.6 + Math.random() * 0.4);
+          mid.x += (Math.random() - 0.5) * 0.15;
+          const geo = new THREE.BufferGeometry().setFromPoints([local.clone(), mid, o.p.clone()]);
+          const mat = new THREE.LineBasicMaterial({
+            color: 0xe8dfd0,
+            transparent: true,
+            opacity: 0,
+          });
+          const line = new THREE.Line(geo, mat);
+          fxRoot.add(line);
+          leaderLines.push(line);
+        });
+
+        const dur = 900;
+        const t0 = performance.now();
+        function step(now) {
+          const t = Math.min(1, (now - t0) / dur);
+          // ease out cubic
+          const e = 1 - Math.pow(1 - t, 3);
+          glowMat.opacity = Math.sin(e * Math.PI) * 0.95;
+          const pulse = 2.2 + Math.sin(e * Math.PI) * 0.9;
+          glowSprite.scale.set(pulse, pulse, 1);
+          ringMat.opacity = Math.sin(e * Math.PI) * 0.85;
+          focusRing.scale.setScalar(0.7 + e * 0.55);
+          ring2.material.opacity = Math.sin(e * Math.PI) * 0.45;
+          ring2.scale.setScalar(0.85 + e * 0.5);
+          focusRing.rotation.z = e * 0.8;
+          ring2.rotation.z = -e * 0.6;
+          leaderLines.forEach((ln, i) => {
+            ln.material.opacity = Math.sin(e * Math.PI) * (0.55 - i * 0.05);
+          });
+          // slight scale punch on slab
+          const s = 1 + Math.sin(e * Math.PI) * 0.12;
+          group.scale.set(s, s, s);
+
+          if (t < 1) {
+            requestAnimationFrame(step);
+          } else {
+            resolve();
+          }
+        }
+        requestAnimationFrame(step);
+      });
+    }
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    const tmpWorld = new THREE.Vector3();
 
     const state = {
       scene,
@@ -3153,12 +3513,15 @@
       targetAzimuth: 0,
       dragging: false,
       dragMoved: false,
+      selecting: false,
       lastX: 0,
+      hoverCat: null,
       raf: 0,
       onResize: null,
       onPointerDown: null,
       onPointerMove: null,
       onPointerUp: null,
+      onPointerLeave: null,
       onClick: null,
     };
 
@@ -3173,7 +3536,17 @@
     resize();
     window.addEventListener("resize", resize);
 
+    function pickHit(e) {
+      const rect = canvas.getBoundingClientRect();
+      state.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      state.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      state.raycaster.setFromCamera(state.pointer, camera);
+      const hits = state.raycaster.intersectObjects(state.slabMeshes, false);
+      return hits.length ? hits[0].object : null;
+    }
+
     state.onPointerDown = (e) => {
+      if (state.selecting) return;
       state.dragging = true;
       state.dragMoved = false;
       state.lastX = e.clientX;
@@ -3183,11 +3556,22 @@
       } catch (_) {}
     };
     state.onPointerMove = (e) => {
-      if (!state.dragging) return;
-      const dx = e.clientX - state.lastX;
-      if (Math.abs(dx) > 2) state.dragMoved = true;
-      state.lastX = e.clientX;
-      state.targetAzimuth += dx * 0.0055;
+      if (state.selecting) return;
+      if (state.dragging) {
+        const dx = e.clientX - state.lastX;
+        if (Math.abs(dx) > 2) state.dragMoved = true;
+        state.lastX = e.clientX;
+        state.targetAzimuth += dx * 0.0058;
+        return;
+      }
+      // hover HUD
+      const hit = pickHit(e);
+      const cat = hit?.userData?.category || null;
+      if (cat !== state.hoverCat) {
+        state.hoverCat = cat;
+        setOrbitHud(cat);
+        stage.style.cursor = cat ? "pointer" : "grab";
+      }
     };
     state.onPointerUp = (e) => {
       state.dragging = false;
@@ -3196,31 +3580,71 @@
         canvas.releasePointerCapture(e.pointerId);
       } catch (_) {}
     };
-    state.onClick = (e) => {
-      if (state.dragMoved) return;
-      const rect = canvas.getBoundingClientRect();
-      state.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      state.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      state.raycaster.setFromCamera(state.pointer, camera);
-      const hits = state.raycaster.intersectObjects(state.slabMeshes, false);
-      if (hits.length && hits[0].object.userData.category) {
-        confirmOrbitCategory(hits[0].object.userData.category);
+    state.onPointerLeave = () => {
+      if (!state.selecting) {
+        state.hoverCat = null;
+        setOrbitHud(null);
+        stage.style.cursor = "grab";
       }
+    };
+    state.onClick = async (e) => {
+      if (state.dragMoved || state.selecting) return;
+      const hit = pickHit(e);
+      if (!hit?.userData?.category) return;
+      state.selecting = true;
+      setOrbitHud(hit.userData.category);
+      await playSelectFx(hit);
+      if (!orbitState) return; // closed mid-fx
+      confirmOrbitCategory(hit.userData.category);
     };
 
     canvas.addEventListener("pointerdown", state.onPointerDown);
     canvas.addEventListener("pointermove", state.onPointerMove);
     canvas.addEventListener("pointerup", state.onPointerUp);
     canvas.addEventListener("pointercancel", state.onPointerUp);
+    canvas.addEventListener("pointerleave", state.onPointerLeave);
     canvas.addEventListener("click", state.onClick);
 
     function tick() {
       state.raf = requestAnimationFrame(tick);
-      // gentle idle drift when not dragging
-      if (!state.dragging) state.targetAzimuth += 0.0012;
+      if (!state.dragging && !state.selecting) state.targetAzimuth += 0.00135;
       state.azimuth += (state.targetAzimuth - state.azimuth) * 0.12;
       root.rotation.y = state.azimuth;
-      // keep slabs upright-ish facing camera azimuth
+
+      // Depth falloff: fade mats by camera-facing depth
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      slabMeshes.forEach((hit) => {
+        const g = hit.userData.slabGroup;
+        if (!g) return;
+        g.getWorldPosition(tmpWorld);
+        // z in view: closer to camera = higher opacity
+        const viewZ = tmpWorld.clone().sub(camera.position).dot(camDir);
+        // viewZ positive = in front; normalize roughly
+        const depth = Math.max(0, Math.min(1, (viewZ - 2.5) / 5.5));
+        // depth 0 = near/front-ish when wrapping... actually smaller viewZ (more toward camera) is front
+        // Better: distance to camera
+        const dist = tmpWorld.distanceTo(camera.position);
+        const near = 4.2;
+        const far = 10.5;
+        const t = Math.max(0, Math.min(1, (dist - near) / (far - near)));
+        const front = 1 - t;
+        if (hit.userData.silMat && !state.selecting) {
+          hit.userData.silMat.opacity = 0.35 + front * 0.65;
+        }
+        if (hit.userData.frameMat && !state.selecting) {
+          hit.userData.frameMat.opacity = 0.25 + front * 0.65;
+        }
+        if (hit.userData.wire?.material && !state.selecting) {
+          hit.userData.wire.material.opacity = 0.12 + front * 0.4;
+        }
+        // subtle scale by depth
+        if (!state.selecting) {
+          const sc = 0.82 + front * 0.22;
+          g.scale.set(sc, sc, sc);
+        }
+      });
+
       const deg = ((state.azimuth * 180) / Math.PI) % 360;
       if (azimuthEl) {
         const shown = ((deg % 360) + 360) % 360;
@@ -3242,6 +3666,7 @@
     show(phaseOrbit);
     window.scrollTo(0, 0);
     disposeOrbit();
+    setOrbitHud(null);
     if (reducedMotion) {
       buildOrbitFallback();
       return;
@@ -3251,7 +3676,12 @@
       buildOrbitFallback();
       return;
     }
-    requestAnimationFrame(() => initOrbitScene());
+    requestAnimationFrame(() => {
+      initOrbitScene().catch((err) => {
+        console.warn("orbit init failed", err);
+        buildOrbitFallback();
+      });
+    });
   }
 
   function closeOrbitMode(opts = {}) {

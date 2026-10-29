@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=orbit1" />
+  <link rel="stylesheet" href="styles.css?v=orbit2" />
 </head>
 <body>
   <div class="grid-bg" aria-hidden="true"></div>
@@ -325,8 +325,13 @@
       </div>
     </div>
 
+    <div class="orbit-hud" id="orbitHud" hidden aria-live="polite">
+      <span class="orbit-hud-zh" id="orbitHudZh"></span>
+      <span class="orbit-hud-en" id="orbitHudEn"></span>
+    </div>
+
     <div class="orbit-chrome orbit-chrome--bottom">
-      <span class="orbit-hint" id="orbitHint">拖拽旋转 · 点击品类开始搜索</span>
+      <span class="orbit-hint" id="orbitHint">拖拽旋转 · 点击剪影开始搜索</span>
       <span class="orbit-azimuth" id="orbitAzimuth" aria-hidden="true">0°</span>
     </div>
   </section>
@@ -343,6 +348,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
-  <script src="app.js?v=orbit1"></script>
+  <script src="app.js?v=orbit2"></script>
 </body>
 </html>
