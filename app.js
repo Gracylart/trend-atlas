@@ -2898,6 +2898,61 @@
     { id: "accessories", en: "Accessories", zh: "配饰", query: "Women's Accessories Trends" },
   ];
 
+  // Extra garment silhouettes filling the ring (map → category or own query)
+  const ORBIT_GARMENTS = [
+    { id: "tee", en: "Tee", zh: "T恤", map: "tops" },
+    { id: "tank", en: "Tank", zh: "背心", map: "tops" },
+    { id: "blouse", en: "Blouse", zh: "罩衫", map: "shirts-blouses" },
+    { id: "turtleneck", en: "Turtleneck", zh: "高领", map: "knitwear" },
+    { id: "hoodie", en: "Hoodie", zh: "连帽衫", map: "sportswear" },
+    { id: "cardigan", en: "Cardigan", zh: "开衫", map: "knitwear" },
+    { id: "blazer", en: "Blazer", zh: "西装外套", map: "tailoring" },
+    { id: "trench", en: "Trench", zh: "风衣", map: "coats" },
+    { id: "puffer", en: "Puffer", zh: "羽绒服", map: "coats" },
+    { id: "leather-jacket", en: "Leather Jacket", zh: "皮夹克", map: "jackets" },
+    { id: "jeans", en: "Jeans", zh: "牛仔裤", map: "denim" },
+    { id: "wide-leg", en: "Wide-leg", zh: "阔腿裤", map: "trousers" },
+    { id: "cargo", en: "Cargo", zh: "工装裤", map: "trousers" },
+    { id: "shorts", en: "Shorts", zh: "短裤", map: "sportswear" },
+    { id: "mini-skirt", en: "Mini Skirt", zh: "短裙", map: "skirts" },
+    { id: "midi-skirt", en: "Midi Skirt", zh: "中长裙", map: "skirts" },
+    { id: "pencil-skirt", en: "Pencil Skirt", zh: "铅笔裙", map: "skirts" },
+    { id: "slip-dress", en: "Slip Dress", zh: "吊带裙", map: "dresses" },
+    { id: "shirt-dress", en: "Shirt Dress", zh: "衬衫裙", map: "dresses" },
+    { id: "jumpsuit", en: "Jumpsuit", zh: "连体裤", map: "resortwear" },
+    { id: "scarf", en: "Scarf", zh: "围巾", map: "accessories" },
+    { id: "belt", en: "Belt", zh: "腰带", map: "accessories" },
+    { id: "heel", en: "Heel", zh: "高跟鞋", map: "accessories" },
+    { id: "sneaker", en: "Sneaker", zh: "运动鞋", map: "accessories" },
+    { id: "tote", en: "Tote", zh: "托特包", map: "accessories" },
+    { id: "hat", en: "Hat", zh: "帽饰", map: "accessories" },
+    { id: "gloves", en: "Gloves", zh: "手套", map: "accessories" },
+    { id: "boots", en: "Boots", zh: "靴履", map: "accessories" },
+  ];
+
+  function garmentToSearch(g) {
+    if (!g) return null;
+    if (g.query) return g;
+    if (g.map) {
+      const cat = ORBIT_CATEGORIES.find((c) => c.id === g.map);
+      if (cat) {
+        return {
+          id: g.id,
+          en: g.en,
+          zh: g.zh,
+          query: cat.query,
+          mapLabel: cat.zh,
+        };
+      }
+    }
+    return {
+      id: g.id,
+      en: g.en,
+      zh: g.zh,
+      query: `Women's ${g.en} Trends`,
+    };
+  }
+
   let orbitState = null;
   const THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.min.js";
 
@@ -2923,24 +2978,24 @@
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, 256, 512);
-    ctx.fillStyle = "rgba(232, 223, 208, 0.05)";
-    ctx.fillRect(28, 40, 200, 432);
-    ctx.strokeStyle = "rgba(232, 223, 208, 0.55)";
+    ctx.fillStyle = "rgba(232, 223, 208, 0.045)";
+    ctx.fillRect(26, 36, 204, 440);
+    ctx.strokeStyle = "rgba(232, 223, 208, 0.5)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(28.5, 40.5, 199, 431);
-    ctx.strokeStyle = "rgba(232, 223, 208, 0.16)";
+    ctx.strokeRect(26.5, 36.5, 203, 439);
+    ctx.strokeStyle = "rgba(232, 223, 208, 0.14)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(40.5, 52.5, 175, 407);
+    ctx.strokeRect(38.5, 48.5, 179, 415);
     const tex = new THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
   }
 
-  function loadSilhouetteTexture(cat) {
+  function loadSilhouetteTexture(id) {
     return new Promise((resolve) => {
       const loader = new THREE.TextureLoader();
       loader.load(
-        silhouetteUrl(cat.id),
+        silhouetteUrl(id),
         (tex) => {
           if ("SRGBColorSpace" in THREE) tex.colorSpace = THREE.SRGBColorSpace;
           tex.needsUpdate = true;
@@ -2948,14 +3003,13 @@
         },
         undefined,
         () => {
-          // Fallback: cream abstract mark if SVG missing
           const c = document.createElement("canvas");
           c.width = 256;
           c.height = 512;
           const ctx = c.getContext("2d");
           ctx.fillStyle = "rgba(232, 224, 212, 0.85)";
           ctx.beginPath();
-          ctx.ellipse(128, 220, 48, 90, 0, 0, Math.PI * 2);
+          ctx.ellipse(128, 220, 40, 80, 0, 0, Math.PI * 2);
           ctx.fill();
           const t = new THREE.CanvasTexture(c);
           t.needsUpdate = true;
@@ -2999,17 +3053,17 @@
     orbitState = null;
   }
 
-  function setOrbitHud(cat) {
+  function setOrbitHud(item) {
     const hud = document.getElementById("orbitHud");
     const zh = document.getElementById("orbitHudZh");
     const en = document.getElementById("orbitHudEn");
     if (!hud) return;
-    if (!cat) {
+    if (!item) {
       hud.hidden = true;
       return;
     }
-    if (zh) zh.textContent = cat.zh;
-    if (en) en.textContent = cat.en;
+    if (zh) zh.textContent = item.zh || "";
+    if (en) en.textContent = item.en || "";
     hud.hidden = false;
   }
 
@@ -3019,12 +3073,17 @@
     const canvas = document.getElementById("orbitCanvas");
     if (!list || !fallback) return;
     list.innerHTML = "";
-    ORBIT_CATEGORIES.forEach((cat) => {
+    const items = [
+      ...ORBIT_CATEGORIES.map((c) => ({ ...c, kind: "category" })),
+      ...ORBIT_GARMENTS.slice(0, 12).map((g) => ({ ...garmentToSearch(g), kind: "garment" })),
+    ];
+    items.forEach((cat) => {
       const li = document.createElement("li");
       const btn = document.createElement("button");
       btn.type = "button";
+      const sid = cat.id;
       btn.innerHTML =
-        `<img class="orbit-fallback-icon" src="${silhouetteUrl(cat.id)}" alt="" width="36" height="56" />` +
+        `<img class="orbit-fallback-icon" src="${silhouetteUrl(sid)}" alt="" width="36" height="56" />` +
         `<span class="orbit-fallback-text">` +
         `<span class="orbit-fallback-zh">${cat.zh}</span>` +
         `<span class="orbit-fallback-en">${cat.en}</span>` +
@@ -3043,69 +3102,54 @@
 
   function addWireCage(root, radius, height) {
     const cream = 0xe8dfd0;
-    // Concentric ellipse rings at several heights
-    const ringYs = [-height * 0.48, -height * 0.22, 0.05, height * 0.28, height * 0.48];
-    const ringRadii = [radius * 1.02, radius * 0.92, radius * 1.05, radius * 0.95, radius * 1.0];
+    const ringYs = [-height * 0.5, -height * 0.28, -0.05, height * 0.22, height * 0.42, height * 0.55];
+    const ringRadii = [radius * 1.04, radius * 0.94, radius * 1.08, radius * 0.98, radius * 1.02, radius * 0.9];
     ringYs.forEach((y, i) => {
       const r = ringRadii[i];
       const pts = [];
-      const seg = 64;
+      const seg = 72;
       for (let s = 0; s <= seg; s++) {
         const a = (s / seg) * Math.PI * 2;
         pts.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
       }
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
       root.add(
         new THREE.Line(
-          geo,
+          new THREE.BufferGeometry().setFromPoints(pts),
           new THREE.LineBasicMaterial({
             color: cream,
             transparent: true,
-            opacity: i === 2 ? 0.32 : 0.16,
+            opacity: i === 2 || i === 3 ? 0.34 : 0.14,
           })
         )
       );
     });
-    // Vertical guides
-    const guides = 18;
-    for (let i = 0; i < guides; i++) {
-      const a = (i / guides) * Math.PI * 2;
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2;
       const x = Math.cos(a) * radius;
       const z = Math.sin(a) * radius;
-      const geo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(x, -height * 0.5, z),
-        new THREE.Vector3(x, height * 0.5, z),
-      ]);
       root.add(
         new THREE.Line(
-          geo,
-          new THREE.LineBasicMaterial({
-            color: cream,
-            transparent: true,
-            opacity: 0.1,
-          })
+          new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(x, -height * 0.52, z),
+            new THREE.Vector3(x, height * 0.55, z),
+          ]),
+          new THREE.LineBasicMaterial({ color: cream, transparent: true, opacity: 0.09 })
         )
       );
     }
-    // Outer thin cylinder edges
-    const cyl = new THREE.CylinderGeometry(radius * 1.08, radius * 1.08, height * 1.05, 48, 1, true);
+    const cyl = new THREE.CylinderGeometry(radius * 1.1, radius * 1.1, height * 1.12, 56, 1, true);
     root.add(
       new THREE.LineSegments(
-        new THREE.EdgesGeometry(cyl, 12),
-        new THREE.LineBasicMaterial({ color: cream, transparent: true, opacity: 0.14 })
+        new THREE.EdgesGeometry(cyl, 10),
+        new THREE.LineBasicMaterial({ color: cream, transparent: true, opacity: 0.12 })
       )
     );
   }
 
   function makeWireSlab(w, h, opacity) {
-    const box = new THREE.BoxGeometry(w, h, 0.03);
     return new THREE.LineSegments(
-      new THREE.EdgesGeometry(box),
-      new THREE.LineBasicMaterial({
-        color: 0xe8dfd0,
-        transparent: true,
-        opacity: opacity,
-      })
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, 0.028)),
+      new THREE.LineBasicMaterial({ color: 0xe8dfd0, transparent: true, opacity })
     );
   }
 
@@ -3123,12 +3167,12 @@
     stage.style.cursor = "grab";
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.048);
+    scene.fog = new THREE.FogExp2(0x000000, 0.052);
 
-    // Stronger perspective — FOV + closer camera so ring wraps sphere
-    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 140);
-    camera.position.set(0, 0.55, 7.6);
-    camera.lookAt(0, 0.1, 0);
+    const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 140);
+    const camHome = new THREE.Vector3(0, 0.62, 7.35);
+    camera.position.copy(camHome);
+    camera.lookAt(0, 0.12, 0);
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -3142,267 +3186,295 @@
     const root = new THREE.Group();
     scene.add(root);
 
-    // Starfield
+    // Starfield + twinkle metadata
+    let starPoints = null;
+    let starBaseOpacity = 0.48;
     {
-      const count = 1100;
+      const count = 1400;
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
-        const r = 16 + Math.random() * 42;
+        const r = 15 + Math.random() * 45;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);
         pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.5;
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.48;
         pos[i * 3 + 2] = r * Math.cos(phi);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      scene.add(
-        new THREE.Points(
-          geo,
-          new THREE.PointsMaterial({
-            color: 0xe8dfd0,
-            size: 0.032,
-            transparent: true,
-            opacity: 0.5,
-            depthWrite: false,
-            sizeAttenuation: true,
-          })
-        )
-      );
+      const mat = new THREE.PointsMaterial({
+        color: 0xe8dfd0,
+        size: 0.03,
+        transparent: true,
+        opacity: starBaseOpacity,
+        depthWrite: false,
+        sizeAttenuation: true,
+      });
+      starPoints = new THREE.Points(geo, mat);
+      scene.add(starPoints);
     }
 
-    // Nucleus
+    // Nucleus denser
+    let nucleusMat = null;
     {
-      const count = 2600;
+      const count = 3200;
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
         const theta = 2 * Math.PI * Math.random();
         const phi = Math.acos(2 * Math.random() - 1);
-        const r = 1.45 * Math.cbrt(Math.random());
+        const r = 1.42 * Math.cbrt(Math.random());
         pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
         pos[i * 3 + 2] = r * Math.cos(phi);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      root.add(
-        new THREE.Points(
-          geo,
-          new THREE.PointsMaterial({
-            color: 0xe8dfd0,
-            size: 0.026,
-            transparent: true,
-            opacity: 0.88,
-            depthWrite: false,
-            sizeAttenuation: true,
-          })
-        )
-      );
+      nucleusMat = new THREE.PointsMaterial({
+        color: 0xe8dfd0,
+        size: 0.024,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        sizeAttenuation: true,
+      });
+      root.add(new THREE.Points(geo, nucleusMat));
     }
 
-    const cageR = 3.35;
-    const cageH = 4.4;
-    addWireCage(root, cageR, cageH);
+    addWireCage(root, 3.4, 4.8);
 
     const frameTex = makeFrameTexture();
     const slabMeshes = [];
-    const depthMats = []; // materials to fade by depth
-    const decoAnchors = []; // decorative nodes for leader lines
+    const slabGroups = [];
+    const decoAnchors = [];
 
-    // --- Multi-tier category slabs (silhouette only) ---
-    const tiers = [
-      { y: 1.15, radius: 3.15, scale: 0.82, count: 5, phase: 0.12 },
-      { y: 0.05, radius: 3.45, scale: 1.0, count: 5, phase: 0.0 },
-      { y: -1.15, radius: 3.2, scale: 0.88, count: 4, phase: 0.22 },
+    // Build item queue: categories first, then garments for density
+    const allItems = [
+      ...ORBIT_CATEGORIES.map((c) => ({ ...c, kind: "category", silId: c.id })),
+      ...ORBIT_GARMENTS.map((g) => {
+        const mapped = garmentToSearch(g);
+        return { ...mapped, kind: "garment", silId: g.id, map: g.map };
+      }),
     ];
 
-    const texList = await Promise.all(ORBIT_CATEGORIES.map((c) => loadSilhouetteTexture(c)));
-    let catIdx = 0;
+    const uniqueIds = [...new Set(allItems.map((i) => i.silId))];
+    const texMap = {};
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        texMap[id] = await loadSilhouetteTexture(id);
+      })
+    );
 
-    tiers.forEach((tier) => {
-      for (let i = 0; i < tier.count; i++) {
-        if (catIdx >= ORBIT_CATEGORIES.length) break;
-        const cat = ORBIT_CATEGORIES[catIdx];
-        const tex = texList[catIdx];
-        catIdx += 1;
-        const angle = (i / tier.count) * Math.PI * 2 - Math.PI / 2 + tier.phase;
-        const group = new THREE.Group();
-        const x = Math.cos(angle) * tier.radius;
-        const z = Math.sin(angle) * tier.radius;
-        group.position.set(x, tier.y, z);
-        group.lookAt(0, tier.y, 0);
-        group.rotateY(Math.PI);
+    function placeSlab(item, angle, y, radius, scale, opts = {}) {
+      const group = new THREE.Group();
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      group.position.set(x, y, z);
+      group.lookAt(0, y, 0);
+      group.rotateY(Math.PI);
 
-        const w = 0.7 * tier.scale;
-        const h = 1.45 * tier.scale;
+      const hJitter = opts.hJitter || 1;
+      const w = 0.62 * scale;
+      const h = 1.28 * scale * hJitter;
 
-        const frameMat = new THREE.MeshBasicMaterial({
-          map: frameTex,
-          transparent: true,
-          opacity: 0.85,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        });
-        const frame = new THREE.Mesh(new THREE.PlaneGeometry(w, h), frameMat);
-        group.add(frame);
+      const frameMat = new THREE.MeshBasicMaterial({
+        map: frameTex,
+        transparent: true,
+        opacity: opts.frameOpacity ?? 0.8,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      group.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), frameMat));
 
-        const silMat = new THREE.MeshBasicMaterial({
-          map: tex,
-          transparent: true,
-          opacity: 0.95,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        });
-        const sil = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, h * 0.78), silMat);
-        sil.position.z = 0.02;
-        group.add(sil);
+      const silMat = new THREE.MeshBasicMaterial({
+        map: texMap[item.silId] || texMap.tops,
+        transparent: true,
+        opacity: opts.silOpacity ?? 0.92,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const sil = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.7, h * 0.76), silMat);
+      sil.position.z = 0.02;
+      group.add(sil);
 
-        const wire = makeWireSlab(w * 1.02, h * 1.02, 0.4);
-        group.add(wire);
+      const wire = makeWireSlab(w * 1.02, h * 1.02, opts.wireOpacity ?? 0.38);
+      group.add(wire);
 
-        // Invisible hit plane (slightly larger)
-        const hitMat = new THREE.MeshBasicMaterial({
+      const hit = new THREE.Mesh(
+        new THREE.PlaneGeometry(w * 1.12, h * 1.12),
+        new THREE.MeshBasicMaterial({
           transparent: true,
           opacity: 0,
           side: THREE.DoubleSide,
           depthWrite: false,
-        });
-        const hit = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.15, h * 1.15), hitMat);
-        hit.position.z = 0.04;
-        hit.userData.category = cat;
-        hit.userData.slabGroup = group;
-        hit.userData.silMat = silMat;
-        hit.userData.frameMat = frameMat;
-        hit.userData.wire = wire;
-        group.add(hit);
+        })
+      );
+      hit.position.z = 0.04;
+      hit.userData.item = item;
+      hit.userData.category = item; // confirmOrbitCategory compatible
+      hit.userData.slabGroup = group;
+      hit.userData.silMat = silMat;
+      hit.userData.frameMat = frameMat;
+      hit.userData.wire = wire;
+      hit.userData.baseSil = opts.silOpacity ?? 0.92;
+      hit.userData.baseFrame = opts.frameOpacity ?? 0.8;
+      hit.userData.baseWire = opts.wireOpacity ?? 0.38;
+      group.add(hit);
 
-        root.add(group);
-        slabMeshes.push(hit);
-        depthMats.push({ mat: frameMat, base: 0.85 }, { mat: silMat, base: 0.95 });
-        decoAnchors.push(group);
-      }
-    });
+      root.add(group);
+      slabMeshes.push(hit);
+      slabGroups.push(group);
+      decoAnchors.push(group);
+      return group;
+    }
 
-    // Extra decorative empty wireframe slabs for density (not clickable)
-    const decoSpecs = [
-      { y: 1.85, radius: 2.9, n: 8, scale: 0.55, opacity: 0.22 },
-      { y: -1.85, radius: 2.95, n: 8, scale: 0.55, opacity: 0.2 },
-      { y: 0.55, radius: 3.85, n: 10, scale: 0.42, opacity: 0.16 },
-      { y: -0.55, radius: 3.9, n: 10, scale: 0.42, opacity: 0.14 },
-      { y: 0.0, radius: 2.55, n: 6, scale: 0.35, opacity: 0.12 },
+    // 3 dense tiers — mix categories + garments
+    const tiers = [
+      { y: 1.35, radius: 3.2, scale: 0.78, n: 12, phase: 0.08 },
+      { y: 0.05, radius: 3.5, scale: 1.0, n: 14, phase: 0.0 },
+      { y: -1.3, radius: 3.25, scale: 0.85, n: 12, phase: 0.18 },
     ];
-    decoSpecs.forEach((spec) => {
-      for (let i = 0; i < spec.n; i++) {
-        const angle = (i / spec.n) * Math.PI * 2 + spec.y * 0.4;
-        const g = new THREE.Group();
-        const x = Math.cos(angle) * spec.radius;
-        const z = Math.sin(angle) * spec.radius;
-        g.position.set(x, spec.y, z);
-        g.lookAt(0, spec.y, 0);
-        g.rotateY(Math.PI);
-        const w = 0.55 * spec.scale;
-        const h = 1.15 * spec.scale;
-        const wire = makeWireSlab(w, h, spec.opacity);
-        g.add(wire);
-        // faint empty plane
-        const plane = new THREE.Mesh(
-          new THREE.PlaneGeometry(w * 0.92, h * 0.92),
-          new THREE.MeshBasicMaterial({
-            color: 0xe8dfd0,
-            transparent: true,
-            opacity: 0.03,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-          })
-        );
-        g.add(plane);
-        root.add(g);
-        decoAnchors.push(g);
+    let cursor = 0;
+    tiers.forEach((tier) => {
+      for (let i = 0; i < tier.n; i++) {
+        const item = allItems[cursor % allItems.length];
+        cursor += 1;
+        const angle = (i / tier.n) * Math.PI * 2 - Math.PI / 2 + tier.phase;
+        const hJitter = 0.88 + ((i * 37) % 10) * 0.025;
+        placeSlab(item, angle, tier.y + ((i % 3) - 1) * 0.06, tier.radius, tier.scale, {
+          hJitter,
+          silOpacity: 0.92,
+          frameOpacity: 0.82,
+          wireOpacity: 0.4,
+        });
       }
     });
 
-    // Selection FX group (glow sprite, ring, leader lines)
+    // Extra outer/inner decorative silhouette rings (still clickable via map)
+    const extraRings = [
+      { y: 2.05, radius: 2.85, scale: 0.52, n: 10, phase: 0.3, sil: 0.7, frame: 0.45, wire: 0.22 },
+      { y: -2.0, radius: 2.9, scale: 0.52, n: 10, phase: 0.15, sil: 0.68, frame: 0.42, wire: 0.2 },
+      { y: 0.7, radius: 3.95, scale: 0.48, n: 14, phase: 0.05, sil: 0.55, frame: 0.35, wire: 0.16 },
+      { y: -0.7, radius: 4.0, scale: 0.48, n: 14, phase: 0.22, sil: 0.52, frame: 0.32, wire: 0.14 },
+      { y: 0.0, radius: 2.45, scale: 0.4, n: 8, phase: 0.4, sil: 0.45, frame: 0.28, wire: 0.12 },
+    ];
+    extraRings.forEach((ring) => {
+      for (let i = 0; i < ring.n; i++) {
+        const item = allItems[cursor % allItems.length];
+        cursor += 1;
+        const angle = (i / ring.n) * Math.PI * 2 + ring.phase;
+        placeSlab(item, angle, ring.y, ring.radius, ring.scale, {
+          hJitter: 0.9 + (i % 5) * 0.04,
+          silOpacity: ring.sil,
+          frameOpacity: ring.frame,
+          wireOpacity: ring.wire,
+        });
+      }
+    });
+
+    // Pure empty wire accents (not clickable) for Atelier density
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2 + 0.2;
+      const y = ((i % 5) - 2) * 0.55;
+      const r = 3.7 + (i % 3) * 0.15;
+      const g = new THREE.Group();
+      g.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+      g.lookAt(0, y, 0);
+      g.rotateY(Math.PI);
+      const ww = 0.35 + (i % 3) * 0.08;
+      const wh = 0.7 + (i % 4) * 0.12;
+      g.add(makeWireSlab(ww, wh, 0.1));
+      root.add(g);
+      decoAnchors.push(g);
+    }
+
+    // --- Selection FX ---
     const fxRoot = new THREE.Group();
     root.add(fxRoot);
 
     function makeGlowTexture() {
       const c = document.createElement("canvas");
-      c.width = 256;
-      c.height = 256;
+      c.width = 512;
+      c.height = 512;
       const ctx = c.getContext("2d");
-      const g = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
-      g.addColorStop(0, "rgba(255,248,235,0.95)");
-      g.addColorStop(0.25, "rgba(232,223,208,0.45)");
-      g.addColorStop(0.55, "rgba(232,223,208,0.12)");
-      g.addColorStop(1, "rgba(232,223,208,0)");
+      const g = ctx.createRadialGradient(256, 256, 4, 256, 256, 250);
+      g.addColorStop(0, "rgba(255,252,245,1)");
+      g.addColorStop(0.12, "rgba(255,248,230,0.75)");
+      g.addColorStop(0.35, "rgba(232,223,208,0.28)");
+      g.addColorStop(0.65, "rgba(232,223,208,0.06)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 256, 256);
-      // diagonal flare streaks
-      ctx.save();
-      ctx.translate(128, 128);
-      ctx.rotate(-Math.PI / 5);
+      ctx.fillRect(0, 0, 512, 512);
       ctx.globalCompositeOperation = "lighter";
-      const streak = ctx.createLinearGradient(-120, 0, 120, 0);
-      streak.addColorStop(0, "rgba(255,250,240,0)");
-      streak.addColorStop(0.5, "rgba(255,250,240,0.55)");
-      streak.addColorStop(1, "rgba(255,250,240,0)");
-      ctx.fillStyle = streak;
-      ctx.fillRect(-120, -3, 240, 6);
-      ctx.rotate(Math.PI / 2.2);
-      ctx.fillRect(-90, -2, 180, 4);
+      ctx.save();
+      ctx.translate(256, 256);
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 4);
+        const streak = ctx.createLinearGradient(-240, 0, 240, 0);
+        streak.addColorStop(0, "rgba(255,250,240,0)");
+        streak.addColorStop(0.5, `rgba(255,250,240,${0.55 - i * 0.08})`);
+        streak.addColorStop(1, "rgba(255,250,240,0)");
+        ctx.fillStyle = streak;
+        ctx.fillRect(-240, -2 - i, 480, 4 + i * 1.5);
+      }
       ctx.restore();
       const t = new THREE.CanvasTexture(c);
       t.needsUpdate = true;
       return t;
     }
 
-    const glowTex = makeGlowTexture();
     const glowMat = new THREE.SpriteMaterial({
-      map: glowTex,
+      map: makeGlowTexture(),
       transparent: true,
       opacity: 0,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
     const glowSprite = new THREE.Sprite(glowMat);
-    glowSprite.scale.set(2.4, 2.4, 1);
+    glowSprite.scale.set(3.2, 3.2, 1);
     glowSprite.visible = false;
     fxRoot.add(glowSprite);
 
-    // Focus ring (torus wire)
-    const ringGeo = new THREE.TorusGeometry(0.95, 0.012, 8, 64);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xe8dfd0,
       transparent: true,
       opacity: 0,
       depthWrite: false,
     });
-    const focusRing = new THREE.Mesh(ringGeo, ringMat);
+    const focusRing = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.014, 10, 80), ringMat);
     focusRing.visible = false;
     fxRoot.add(focusRing);
 
-    // Secondary wire circle
-    const ring2 = new THREE.Mesh(
-      new THREE.TorusGeometry(1.15, 0.006, 6, 64),
-      new THREE.MeshBasicMaterial({
-        color: 0xe8dfd0,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      })
-    );
+    const ring2Mat = new THREE.MeshBasicMaterial({
+      color: 0xe8dfd0,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.007, 8, 80), ring2Mat);
     ring2.visible = false;
     fxRoot.add(ring2);
 
-    let leaderLines = [];
+    const ring3Mat = new THREE.MeshBasicMaterial({
+      color: 0xe8dfd0,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const ring3 = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.01, 8, 64), ring3Mat);
+    ring3.visible = false;
+    fxRoot.add(ring3);
 
-    function clearLeaders() {
-      leaderLines.forEach((ln) => {
+    let leaderLines = [];
+    let sphereArcs = [];
+
+    function clearFxLines() {
+      [...leaderLines, ...sphereArcs].forEach((ln) => {
         fxRoot.remove(ln);
         ln.geometry?.dispose();
         ln.material?.dispose();
       });
       leaderLines = [];
+      sphereArcs = [];
     }
 
     function playSelectFx(hitMesh) {
@@ -3414,46 +3486,55 @@
         }
         const worldPos = new THREE.Vector3();
         group.getWorldPosition(worldPos);
-        // convert to root-local
         const local = worldPos.clone();
         root.worldToLocal(local);
 
-        clearLeaders();
+        clearFxLines();
         glowSprite.position.copy(local);
         glowSprite.visible = true;
         glowMat.opacity = 0;
-        focusRing.position.copy(local);
-        focusRing.lookAt(0, local.y, 0);
-        focusRing.visible = true;
-        ringMat.opacity = 0;
-        ring2.position.copy(local);
-        ring2.lookAt(0, local.y, 0);
-        ring2.visible = true;
-        ring2.material.opacity = 0;
+        [focusRing, ring2, ring3].forEach((r) => {
+          r.position.copy(local);
+          r.lookAt(0, local.y, 0);
+          r.visible = true;
+          r.scale.setScalar(0.6);
+        });
+        ringMat.opacity = ring2Mat.opacity = ring3Mat.opacity = 0;
 
-        // Brighten selected materials
-        if (hitMesh.userData.silMat) hitMesh.userData.silMat.opacity = 1;
-        if (hitMesh.userData.frameMat) hitMesh.userData.frameMat.opacity = 1;
-        if (hitMesh.userData.wire?.material) hitMesh.userData.wire.material.opacity = 0.95;
+        // Brighten selected; dim neighbors
+        slabMeshes.forEach((h) => {
+          const isSel = h === hitMesh;
+          if (h.userData.silMat) h.userData.silMat.opacity = isSel ? 1 : h.userData.baseSil * 0.22;
+          if (h.userData.frameMat) h.userData.frameMat.opacity = isSel ? 1 : h.userData.baseFrame * 0.18;
+          if (h.userData.wire?.material)
+            h.userData.wire.material.opacity = isSel ? 1 : h.userData.baseWire * 0.2;
+        });
 
-        // Leader lines to nearest decorative anchors
+        // Dense diagonal leader web to many neighbors
         const others = decoAnchors
           .filter((a) => a !== group)
           .map((a) => {
             const p = new THREE.Vector3();
             a.getWorldPosition(p);
             root.worldToLocal(p);
-            return { a, p, d: p.distanceTo(local) };
+            return { p, d: p.distanceTo(local) };
           })
           .sort((a, b) => a.d - b.d)
-          .slice(0, 6);
+          .slice(0, 14);
 
         others.forEach((o, i) => {
-          // slight diagonal offset mid-point for web feel
-          const mid = local.clone().lerp(o.p, 0.5);
-          mid.y += (i % 2 === 0 ? 0.25 : -0.2) * (0.6 + Math.random() * 0.4);
-          mid.x += (Math.random() - 0.5) * 0.15;
-          const geo = new THREE.BufferGeometry().setFromPoints([local.clone(), mid, o.p.clone()]);
+          const mid = local.clone().lerp(o.p, 0.42 + (i % 3) * 0.08);
+          mid.y += (i % 2 === 0 ? 1 : -1) * (0.15 + (i % 5) * 0.08);
+          mid.x += Math.sin(i * 1.7) * 0.22;
+          mid.z += Math.cos(i * 1.3) * 0.18;
+          const mid2 = local.clone().lerp(o.p, 0.72);
+          mid2.y += (i % 2 === 0 ? -0.12 : 0.18);
+          const geo = new THREE.BufferGeometry().setFromPoints([
+            local.clone(),
+            mid,
+            mid2,
+            o.p.clone(),
+          ]);
           const mat = new THREE.LineBasicMaterial({
             color: 0xe8dfd0,
             transparent: true,
@@ -3464,33 +3545,75 @@
           leaderLines.push(line);
         });
 
-        const dur = 900;
+        // Arcs into particle sphere (nucleus)
+        for (let i = 0; i < 5; i++) {
+          const end = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.6,
+            (Math.random() - 0.5) * 0.6,
+            (Math.random() - 0.5) * 0.6
+          );
+          const mid = local.clone().multiplyScalar(0.45);
+          mid.y += (i - 2) * 0.12;
+          const geo = new THREE.BufferGeometry().setFromPoints([local.clone(), mid, end]);
+          const mat = new THREE.LineBasicMaterial({
+            color: 0xe8dfd0,
+            transparent: true,
+            opacity: 0,
+          });
+          const line = new THREE.Line(geo, mat);
+          fxRoot.add(line);
+          sphereArcs.push(line);
+        }
+
+        // Camera ease toward selection
+        const camTarget = camHome.clone();
+        const toSel = worldPos.clone().normalize().multiplyScalar(0.55);
+        camTarget.add(toSel);
+        camTarget.z = Math.max(6.2, camTarget.z - 0.45);
+        const camFrom = camera.position.clone();
+
+        const dur = 1200;
         const t0 = performance.now();
         function step(now) {
+          if (!orbitState) {
+            resolve();
+            return;
+          }
           const t = Math.min(1, (now - t0) / dur);
-          // ease out cubic
           const e = 1 - Math.pow(1 - t, 3);
-          glowMat.opacity = Math.sin(e * Math.PI) * 0.95;
-          const pulse = 2.2 + Math.sin(e * Math.PI) * 0.9;
-          glowSprite.scale.set(pulse, pulse, 1);
-          ringMat.opacity = Math.sin(e * Math.PI) * 0.85;
-          focusRing.scale.setScalar(0.7 + e * 0.55);
-          ring2.material.opacity = Math.sin(e * Math.PI) * 0.45;
-          ring2.scale.setScalar(0.85 + e * 0.5);
-          focusRing.rotation.z = e * 0.8;
-          ring2.rotation.z = -e * 0.6;
+          const pulse = Math.sin(e * Math.PI);
+
+          glowMat.opacity = pulse * 1.0;
+          const gs = 2.6 + pulse * 1.8;
+          glowSprite.scale.set(gs, gs, 1);
+
+          ringMat.opacity = pulse * 0.95;
+          ring2Mat.opacity = pulse * 0.55;
+          ring3Mat.opacity = pulse * 0.7;
+          focusRing.scale.setScalar(0.65 + e * 0.85);
+          ring2.scale.setScalar(0.75 + e * 0.95);
+          ring3.scale.setScalar(0.55 + e * 0.7);
+          focusRing.rotation.z = e * 1.2;
+          ring2.rotation.z = -e * 0.9;
+          ring3.rotation.z = e * 1.6;
+
           leaderLines.forEach((ln, i) => {
-            ln.material.opacity = Math.sin(e * Math.PI) * (0.55 - i * 0.05);
+            ln.material.opacity = pulse * (0.62 - i * 0.028);
           });
-          // slight scale punch on slab
-          const s = 1 + Math.sin(e * Math.PI) * 0.12;
+          sphereArcs.forEach((ln, i) => {
+            ln.material.opacity = pulse * (0.5 - i * 0.05);
+          });
+
+          const s = 1 + pulse * 0.18;
           group.scale.set(s, s, s);
 
-          if (t < 1) {
-            requestAnimationFrame(step);
-          } else {
-            resolve();
-          }
+          camera.position.lerpVectors(camFrom, camTarget, e * 0.85);
+          camera.lookAt(0, 0.12, 0);
+
+          if (nucleusMat) nucleusMat.opacity = 0.9 + pulse * 0.1;
+
+          if (t < 1) requestAnimationFrame(step);
+          else resolve();
         }
         requestAnimationFrame(step);
       });
@@ -3517,6 +3640,7 @@
       lastX: 0,
       hoverCat: null,
       raf: 0,
+      t0: performance.now(),
       onResize: null,
       onPointerDown: null,
       onPointerMove: null,
@@ -3564,13 +3688,12 @@
         state.targetAzimuth += dx * 0.0058;
         return;
       }
-      // hover HUD
       const hit = pickHit(e);
-      const cat = hit?.userData?.category || null;
-      if (cat !== state.hoverCat) {
-        state.hoverCat = cat;
-        setOrbitHud(cat);
-        stage.style.cursor = cat ? "pointer" : "grab";
+      const item = hit?.userData?.item || null;
+      if (item !== state.hoverCat) {
+        state.hoverCat = item;
+        setOrbitHud(item);
+        stage.style.cursor = item ? "pointer" : "grab";
       }
     };
     state.onPointerUp = (e) => {
@@ -3590,12 +3713,13 @@
     state.onClick = async (e) => {
       if (state.dragMoved || state.selecting) return;
       const hit = pickHit(e);
-      if (!hit?.userData?.category) return;
+      const item = hit?.userData?.item;
+      if (!item) return;
       state.selecting = true;
-      setOrbitHud(hit.userData.category);
+      setOrbitHud(item);
       await playSelectFx(hit);
-      if (!orbitState) return; // closed mid-fx
-      confirmOrbitCategory(hit.userData.category);
+      if (!orbitState) return;
+      confirmOrbitCategory(item);
     };
 
     canvas.addEventListener("pointerdown", state.onPointerDown);
@@ -3607,48 +3731,46 @@
 
     function tick() {
       state.raf = requestAnimationFrame(tick);
-      if (!state.dragging && !state.selecting) state.targetAzimuth += 0.00135;
-      state.azimuth += (state.targetAzimuth - state.azimuth) * 0.12;
+      const elapsed = (performance.now() - state.t0) / 1000;
+
+      if (!state.dragging && !state.selecting) state.targetAzimuth += 0.0009;
+      state.azimuth += (state.targetAzimuth - state.azimuth) * 0.1;
       root.rotation.y = state.azimuth;
 
-      // Depth falloff: fade mats by camera-facing depth
-      const camDir = new THREE.Vector3();
-      camera.getWorldDirection(camDir);
-      slabMeshes.forEach((hit) => {
-        const g = hit.userData.slabGroup;
-        if (!g) return;
-        g.getWorldPosition(tmpWorld);
-        // z in view: closer to camera = higher opacity
-        const viewZ = tmpWorld.clone().sub(camera.position).dot(camDir);
-        // viewZ positive = in front; normalize roughly
-        const depth = Math.max(0, Math.min(1, (viewZ - 2.5) / 5.5));
-        // depth 0 = near/front-ish when wrapping... actually smaller viewZ (more toward camera) is front
-        // Better: distance to camera
-        const dist = tmpWorld.distanceTo(camera.position);
-        const near = 4.2;
-        const far = 10.5;
-        const t = Math.max(0, Math.min(1, (dist - near) / (far - near)));
-        const front = 1 - t;
-        if (hit.userData.silMat && !state.selecting) {
-          hit.userData.silMat.opacity = 0.35 + front * 0.65;
-        }
-        if (hit.userData.frameMat && !state.selecting) {
-          hit.userData.frameMat.opacity = 0.25 + front * 0.65;
-        }
-        if (hit.userData.wire?.material && !state.selecting) {
-          hit.userData.wire.material.opacity = 0.12 + front * 0.4;
-        }
-        // subtle scale by depth
-        if (!state.selecting) {
-          const sc = 0.82 + front * 0.22;
+      // Twinkle
+      if (starPoints?.material) {
+        starPoints.material.opacity = starBaseOpacity + Math.sin(elapsed * 1.6) * 0.08;
+      }
+      if (nucleusMat && !state.selecting) {
+        nucleusMat.opacity = 0.82 + Math.sin(elapsed * 2.1) * 0.08;
+        nucleusMat.size = 0.022 + Math.sin(elapsed * 1.4) * 0.004;
+      }
+
+      if (!state.selecting) {
+        slabMeshes.forEach((hit) => {
+          const g = hit.userData.slabGroup;
+          if (!g) return;
+          g.getWorldPosition(tmpWorld);
+          const dist = tmpWorld.distanceTo(camera.position);
+          const near = 4.0;
+          const far = 11.0;
+          const t = Math.max(0, Math.min(1, (dist - near) / (far - near)));
+          const front = 1 - t;
+          const bs = hit.userData.baseSil ?? 0.9;
+          const bf = hit.userData.baseFrame ?? 0.8;
+          const bw = hit.userData.baseWire ?? 0.35;
+          if (hit.userData.silMat) hit.userData.silMat.opacity = bs * (0.35 + front * 0.65);
+          if (hit.userData.frameMat) hit.userData.frameMat.opacity = bf * (0.3 + front * 0.7);
+          if (hit.userData.wire?.material)
+            hit.userData.wire.material.opacity = bw * (0.25 + front * 0.75);
+          const sc = 0.84 + front * 0.2;
           g.scale.set(sc, sc, sc);
-        }
-      });
+        });
+      }
 
       const deg = ((state.azimuth * 180) / Math.PI) % 360;
       if (azimuthEl) {
-        const shown = ((deg % 360) + 360) % 360;
-        azimuthEl.textContent = `${shown.toFixed(0)}°`;
+        azimuthEl.textContent = `${(((deg % 360) + 360) % 360).toFixed(0)}°`;
       }
       renderer.render(scene, camera);
     }
