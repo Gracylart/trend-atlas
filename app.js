@@ -2946,36 +2946,15 @@
   }
 
   let orbitState = null;
-  const THREE_CDN = "three";
+  const THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.min.js";
   const BLOOM_CDN = {
-    EffectComposer: "three/addons/postprocessing/EffectComposer.js",
-    RenderPass: "three/addons/postprocessing/RenderPass.js",
-    UnrealBloomPass: "three/addons/postprocessing/UnrealBloomPass.js",
+    EffectComposer: "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/postprocessing/EffectComposer.js",
+    RenderPass: "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/postprocessing/RenderPass.js",
+    UnrealBloomPass: "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/postprocessing/UnrealBloomPass.js",
   };
 
   async function ensureThree() {
-    if (typeof window.THREE !== "undefined" && window.THREE.WebGLRenderer) {
-      if (!window.__orbitBloom) {
-        try {
-          const [ec, rp, ub] = await Promise.all([
-            import(BLOOM_CDN.EffectComposer),
-            import(BLOOM_CDN.RenderPass),
-            import(BLOOM_CDN.UnrealBloomPass),
-          ]);
-          window.__orbitBloom = {
-            EffectComposer: ec.EffectComposer,
-            RenderPass: rp.RenderPass,
-            UnrealBloomPass: ub.UnrealBloomPass,
-          };
-        } catch (_) {
-          window.__orbitBloom = null;
-        }
-      }
-      return true;
-    }
-    try {
-      const mod = await import(THREE_CDN);
-      window.THREE = mod;
+    async function loadBloom() {
       try {
         const [ec, rp, ub] = await Promise.all([
           import(BLOOM_CDN.EffectComposer),
@@ -2987,12 +2966,25 @@
           RenderPass: rp.RenderPass,
           UnrealBloomPass: ub.UnrealBloomPass,
         };
-      } catch (_) {
+      } catch (err) {
+        console.warn("[orbit] bloom addons failed (3D continues without bloom)", err);
         window.__orbitBloom = null;
       }
-      return !!(mod && mod.WebGLRenderer);
+    }
+    if (typeof window.THREE !== "undefined" && window.THREE.WebGLRenderer) {
+      if (!window.__orbitBloom) await loadBloom();
+      return true;
+    }
+    try {
+      console.info("[orbit] loading THREE from", THREE_CDN);
+      const mod = await import(THREE_CDN);
+      window.THREE = mod;
+      await loadBloom();
+      const ok = !!(mod && mod.WebGLRenderer);
+      if (!ok) console.warn("[orbit] THREE loaded but WebGLRenderer missing");
+      return ok;
     } catch (err) {
-      console.warn("THREE load failed", err);
+      console.error("[orbit] THREE load failed", err);
       return false;
     }
   }
@@ -3146,18 +3138,23 @@
     if (!list || !fallback) return;
     list.innerHTML = "";
     const items = [
-      ...ORBIT_CATEGORIES.map((c) => ({ ...c, kind: "category" })),
-      ...ORBIT_GARMENTS.slice(0, 12).map((g) => ({ ...garmentToSearch(g), kind: "garment" })),
+      ...ORBIT_CATEGORIES.map((c) => ({ ...c, kind: "category", silId: c.id })),
+      ...ORBIT_GARMENTS.map((g) => ({ ...garmentToSearch(g), kind: "garment", silId: g.id })),
     ];
     items.forEach((cat) => {
       const li = document.createElement("li");
       const btn = document.createElement("button");
       btn.type = "button";
+      btn.className = "orbit-fallback-cell";
+      btn.title = `${cat.zh} · ${cat.en}`;
+      btn.setAttribute("aria-label", `${cat.zh} ${cat.en}`);
+      const sil = cat.silId || cat.id;
       btn.innerHTML =
-        `<img class="orbit-fallback-icon" src="${silhouetteUrl(cat.id)}" alt="" width="36" height="56" />` +
-        `<span class="orbit-fallback-text">` +
+        `<span class="orbit-fallback-glyph" aria-hidden="true">` +
+        `<img class="orbit-fallback-icon" src="${silhouetteUrl(sil)}" alt="" width="72" height="112" loading="lazy" />` +
+        `</span>` +
+        `<span class="orbit-fallback-caption">` +
         `<span class="orbit-fallback-zh">${cat.zh}</span>` +
-        `<span class="orbit-fallback-en">${cat.en}</span>` +
         `</span>`;
       btn.addEventListener("click", () => confirmOrbitCategory(cat));
       li.appendChild(btn);
@@ -3165,10 +3162,12 @@
     });
     fallback.hidden = false;
     if (canvas) canvas.style.display = "none";
+    const postfx = document.getElementById("orbitPostFx");
+    if (postfx) postfx.style.display = "none";
     const stage = document.getElementById("orbitStage");
     if (stage) stage.style.cursor = "default";
     const hint = document.getElementById("orbitHint");
-    if (hint) hint.textContent = "点击品类开始搜索";
+    if (hint) hint.textContent = "点击剪影开始搜索";
   }
 
   function addWireCage(root, radius, height) {
@@ -3780,7 +3779,7 @@
         waveOrigin = tmpV.clone();
 
         const start = performance.now();
-        const waitMs = 1400;
+        const waitMs = reducedMotion ? 400 : 1400;
         function wait() {
           if (!orbitState) {
             resolve();
@@ -4096,21 +4095,22 @@
       const elapsed = (now - state.t0) / 1000;
       const dt = 1 / 60;
 
-      if (!state.dragging && !selecting) state.targetAzimuth += 0.00055;
+      if (!reducedMotion && !state.dragging && !selecting) state.targetAzimuth += 0.00055;
       state.azimuth += (state.targetAzimuth - state.azimuth) * 0.1;
       root.rotation.y = state.azimuth;
 
-      // Sphere idle yaw + bob
-      nucleus.yawVel += (0.045 - nucleus.yawVel) * 0.02;
+      // Sphere idle yaw + bob (softened under reduced-motion)
+      const idleYaw = reducedMotion ? 0 : 0.045;
+      nucleus.yawVel += (idleYaw - nucleus.yawVel) * 0.02;
       nucleus.yaw += nucleus.yawVel * dt;
       sphereGroup.rotation.y = nucleus.yaw;
-      sphereGroup.position.y = Math.sin(elapsed * 0.6) * 0.04;
+      sphereGroup.position.y = reducedMotion ? 0 : Math.sin(elapsed * 0.6) * 0.04;
 
       updateShellParticles(elapsed);
       updateHoverSlabs(dt);
 
       if (waveT >= 0) {
-        waveT += dt / 2.9;
+        waveT += dt / (reducedMotion ? 0.6 : 2.9);
         if (waveT >= 1) waveT = -1;
       }
 
@@ -4139,10 +4139,12 @@
         });
       }
 
-      state.bloomBoost *= 0.96;
+      if (reducedMotion) state.bloomBoost = 0;
+      else state.bloomBoost *= 0.96;
       if (bloomPass) {
-        bloomPass.strength = 0.55 + state.bloomBoost * 0.45;
-        bloomPass.threshold = 0.42 - state.bloomBoost * 0.08;
+        const boost = reducedMotion ? 0 : state.bloomBoost;
+        bloomPass.strength = (reducedMotion ? 0.35 : 0.55) + boost * 0.45;
+        bloomPass.threshold = 0.42 - boost * 0.08;
       }
 
       const deg = ((state.azimuth * 180) / Math.PI) % 360;
@@ -4167,18 +4169,16 @@
     window.scrollTo(0, 0);
     disposeOrbit();
     setOrbitHud(null);
-    if (reducedMotion) {
-      buildOrbitFallback();
-      return;
-    }
+    // Always try WebGL — reduced-motion only softens FX inside the scene.
     const ok = await ensureThree();
     if (!ok) {
+      console.warn("[orbit] falling back to silhouette grid (THREE unavailable)");
       buildOrbitFallback();
       return;
     }
     requestAnimationFrame(() => {
       initOrbitScene().catch((err) => {
-        console.warn("orbit init failed", err);
+        console.error("[orbit] init failed", err);
         buildOrbitFallback();
       });
     });

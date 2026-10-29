@@ -2166,57 +2166,93 @@ button {
   position: absolute;
   inset: 0;
   overflow: auto;
-  padding: 1rem 1.5rem 2rem;
+  padding: 1.25rem 1.5rem 2.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
+  background: #14120d;
+  z-index: 4;
 }
 
 .orbit-fallback-lead {
   font-family: var(--serif);
-  font-size: 1.25rem;
-  color: var(--accent);
-  margin: 1rem 0 1.5rem;
-  letter-spacing: 0.06em;
+  font-size: 1.05rem;
+  color: rgba(232, 224, 212, 0.72);
+  margin: 0.5rem 0 1.35rem;
+  letter-spacing: 0.18em;
 }
 
 .orbit-fallback-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.85rem 0.75rem;
   width: 100%;
-  max-width: 48rem;
+  max-width: 56rem;
+  margin: 0;
+  padding: 0;
 }
 
-.orbit-fallback-list button {
+.orbit-fallback-list button,
+.orbit-fallback-cell {
   width: 100%;
-  text-align: left;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--line);
-  background: rgba(245, 240, 232, 0.03);
+  text-align: center;
+  padding: 0.85rem 0.45rem 0.65rem;
+  border: 1px solid rgba(185, 177, 159, 0.22);
+  background: rgba(26, 23, 18, 0.72);
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  transition: border-color 0.2s, background 0.2s;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  transition: border-color 0.25s, background 0.25s, transform 0.25s;
 }
 
-.orbit-fallback-list button:hover {
-  border-color: rgba(196, 168, 130, 0.5);
-  background: rgba(245, 240, 232, 0.06);
+.orbit-fallback-list button:hover,
+.orbit-fallback-cell:hover {
+  border-color: rgba(232, 224, 212, 0.55);
+  background: rgba(40, 35, 28, 0.9);
+  transform: translateY(-2px);
+}
+
+.orbit-fallback-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 5.5rem;
+}
+
+.orbit-fallback-icon {
+  width: 3.6rem;
+  height: 5.5rem;
+  object-fit: contain;
+  opacity: 0.92;
+  filter: brightness(1.08) sepia(0.15);
+}
+
+.orbit-fallback-caption {
+  display: block;
+  min-height: 1.1em;
 }
 
 .orbit-fallback-zh {
-  font-size: 0.9rem;
-  color: var(--ink);
-  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  color: rgba(232, 224, 212, 0.55);
+  letter-spacing: 0.12em;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.orbit-fallback-cell:hover .orbit-fallback-zh,
+.orbit-fallback-list button:hover .orbit-fallback-zh,
+.orbit-fallback-cell:focus-visible .orbit-fallback-zh {
+  opacity: 1;
+  color: rgba(232, 224, 212, 0.92);
 }
 
 .orbit-fallback-en {
-  font-size: 0.58rem;
-  color: var(--ink-faint);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  display: none;
 }
 
 @media (max-width: 720px) {
@@ -2279,27 +2315,7 @@ button {
   color: var(--ink-faint);
 }
 
-.orbit-fallback-list button {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 4.5rem;
-}
 
-.orbit-fallback-icon {
-  width: 2.2rem;
-  height: 3.4rem;
-  flex-shrink: 0;
-  object-fit: contain;
-  opacity: 0.92;
-}
-
-.orbit-fallback-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  text-align: left;
-}
 
 .stage--orbit {
   /* ensure absolute HUD positions relative to stage */
