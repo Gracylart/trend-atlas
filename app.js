@@ -117,6 +117,8 @@
   ];
   let apiBase = null; // null = unreachable; string = base URL ("" = same origin)
   let lastSearchPayload = null;
+  /** Queries already retried once in ensureLiveImages (avoid double /api/search). */
+  const liveImageRetryDone = new Set();
   /** In-flight / last pipeline search; used for late hot-swap if phases already showing. */
   let activeSearchPromise = null;
   /** Resolves when detectApi() finishes (ok or unreachable). Await before fetch. */
@@ -574,9 +576,23 @@
     let garments = pickGarmentImages(imgs);
     updateLiveImgBadge(imgs, garments);
     if (garments.length || apiBase === null) return imgs;
+
+    const qKey = String(query || "").trim().toLowerCase();
+    // Already retried this query once — do not hit /api/search again.
+    if (qKey && liveImageRetryDone.has(qKey)) return imgs;
+    // Payload already exists for same query with empty garments — skip refetch.
+    if (
+      lastSearchPayload &&
+      String(lastSearchPayload.query || "").trim().toLowerCase() === qKey
+    ) {
+      if (qKey) liveImageRetryDone.add(qKey);
+      return imgs;
+    }
+
     if (discoveryHint) {
       discoveryHint.textContent = "正在拉取秀场图…";
     }
+    if (qKey) liveImageRetryDone.add(qKey);
     try {
       const data = await fetchSearch(query);
       if (data) {
@@ -1474,7 +1490,7 @@
         tl.call(
           () => card.classList.add("is-in"),
           null,
-          reducedMotion ? 0.2 : 0.35 + i * 0.06
+          reducedMotion ? 0.2 : 0.2 + i * 0.04
         );
       });
 
@@ -1486,14 +1502,14 @@
             setStatus("analysing");
           },
           null,
-          1.2
+          0.7
         );
         tl.to(
           scanLine,
-          { left: "102%", duration: 1.6, ease: "power1.inOut" },
-          1.25
+          { left: "102%", duration: 1.0, ease: "power1.inOut" },
+          0.75
         );
-        tl.call(() => scanLine.classList.remove("is-running"), null, 2.9);
+        tl.call(() => scanLine.classList.remove("is-running"), null, 1.75);
       } else {
         tl.call(() => setStatus("analysing"), null, 0.4);
       }
@@ -1503,13 +1519,13 @@
         tl.call(
           () => card.classList.add("is-tagged"),
           null,
-          reducedMotion ? 0.5 : 2.4 + (i % 5) * 0.08
+          reducedMotion ? 0.5 : 1.5 + (i % 5) * 0.08
         );
       });
 
-      tl.call(() => setStatus("mapping"), null, reducedMotion ? 0.7 : 3.2);
-      tl.call(() => setStatus("generating"), null, reducedMotion ? 0.9 : 3.7);
-      tl.to({}, { duration: reducedMotion ? 0.25 : 0.55 });
+      tl.call(() => setStatus("mapping"), null, reducedMotion ? 0.7 : 2.0);
+      tl.call(() => setStatus("generating"), null, reducedMotion ? 0.9 : 2.4);
+      tl.to({}, { duration: reducedMotion ? 0.25 : 0.3 });
     });
   }
 
@@ -1656,7 +1672,7 @@
       const tl = gsap.timeline({ onComplete: resolve });
       activeTimeline = tl;
 
-      tl.to(discoverySpace, { rotateX: 5, rotateY: -2, duration: 2.6, ease: "power2.inOut" }, 0);
+      tl.to(discoverySpace, { rotateX: 5, rotateY: -2, duration: 1.6, ease: "power2.inOut" }, 0);
 
       cards.forEach((c) => {
         const layout = CLUSTER_LAYOUT[c.cluster];
@@ -1674,7 +1690,7 @@
             rotationY: 0,
             rotationX: 0,
             scale,
-            duration: 1.55 + Math.random() * 0.45,
+            duration: 1.0 + Math.random() * 0.25,
             ease: "power3.inOut",
           },
           0.3 + (c.i % 9) * 0.045
@@ -1693,7 +1709,7 @@
           });
         },
         null,
-        1.55
+        1.0
       );
 
       tl.call(
@@ -1702,14 +1718,14 @@
           discoveryHint.textContent = "聚类完成 · SILHOUETTE / MATERIAL / STRUCTURE / COLOUR";
         },
         null,
-        2.35
+        1.5
       );
 
       $$("#clusterLabels span").forEach((span, i) => {
-        tl.call(() => span.classList.add("is-on"), null, 2.45 + i * 0.12);
+        tl.call(() => span.classList.add("is-on"), null, 1.6 + i * 0.12);
       });
 
-      tl.to({}, { duration: 1.0 });
+      tl.to({}, { duration: 0.45 });
     });
   }
 
@@ -2762,6 +2778,7 @@
     killTimeline();
     closeDetail();
     lastSearchPayload = null;
+    liveImageRetryDone.clear();
 
     // Wait for API probe so we never skip live search due to a race on apiBase
     if (apiReady) {

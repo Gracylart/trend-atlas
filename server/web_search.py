@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import json
 import re
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -60,7 +62,13 @@ RUNWAY_FOCUS_DOMAINS = [
     "elle.com",
 ]
 
+
 IMAGE_CAP = 24
+
+# Short-lived in-memory cache for search_web (visual_q + limit).
+_SEARCH_CACHE: dict[tuple[str, int], tuple[float, dict[str, Any]]] = {}
+_SEARCH_CACHE_LOCK = threading.Lock()
+_SEARCH_CACHE_TTL = 120.0
 
 _FASHION_WORD_RE = re.compile(
     r"\b(fashion|runway|lookbook|womenswear|menswear|couture|"
@@ -428,7 +436,7 @@ def _exa_search(
         "numResults": num_results,
         "includeDomains": FASHION_PRESS_DOMAINS,
         "contents": {
-            "text": {"maxCharacters": 1200},
+            "text": {"maxCharacters": 400},
             "highlights": True,
             "extras": {"imageLinks": 5},
         },
@@ -577,16 +585,27 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
 
     Uses a runway-biased visual query for provider calls when helpful, but always
     returns the original ``q`` in response metadata. Optionally runs a second
-    lightweight Tavily pass on runway-focus domains (soft-fail).
+    lightweight Tavily pass on runway-focus domains only when main+exa yield
+    fewer than 8 images (soft-fail). Results are cached briefly in-process.
     """
+    visual_q = _visual_query(q)
+    cache_key = ((visual_q or "").strip().lower(), max(1, int(limit)))
+
+    with _SEARCH_CACHE_LOCK:
+        hit = _SEARCH_CACHE.get(cache_key)
+        if hit is not None:
+            ts, cached_payload = hit
+            if time.monotonic() - ts < _SEARCH_CACHE_TTL:
+                out = dict(cached_payload)
+                out["cached"] = True
+                return out
+
     providers: list[dict[str, Any]] = []
     batches: list[list[dict[str, Any]]] = []
     image_batches: list[list[dict[str, str]]] = []
     any_ok = False
     any_error = False
     any_key = False
-
-    visual_q = _visual_query(q)
 
     def _run_tavily_main():
         return _tavily_search(visual_q, limit)
@@ -605,12 +624,41 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
     def _run_exa():
         return _exa_search(visual_q, limit)
 
-    jobs = {}
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    def _ingest(meta: dict[str, Any], results: list[dict[str, Any]], images: list[dict[str, str]]) -> None:
+        nonlocal any_ok, any_error
+        providers.append(meta)
+        if meta.get("status") == "ok":
+            any_ok = True
+            batches.append(results)
+            if images:
+                image_batches.append(images)
+        elif meta.get("status") == "error":
+            any_error = True
+
+    def _count_images_so_far() -> int:
+        """Unique image URLs from main+exa batches so far (pre-runway)."""
+        seen: set[str] = set()
+        for batch in image_batches:
+            for obj in batch:
+                url = (obj.get("url") or "").strip()
+                if not url or _is_image_noise(url):
+                    continue
+                seen.add(_normalize_url(url) or url)
+        for batch in batches:
+            for item in batch:
+                for im in _all_images_from_item(item):
+                    seen.add(_normalize_url(im) or im)
+                primary = item.get("image")
+                if isinstance(primary, str) and primary and not _is_image_noise(primary):
+                    seen.add(_normalize_url(primary) or primary)
+        return len(seen)
+
+    # Phase 1: Tavily MAIN + Exa in parallel (no runway yet).
+    jobs: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=2) as pool:
         if TAVILY_API_KEY:
             any_key = True
             jobs["tavily"] = pool.submit(_run_tavily_main)
-            jobs["tavily_runway"] = pool.submit(_run_tavily_runway)
         if EXA_API_KEY:
             any_key = True
             jobs["exa"] = pool.submit(_run_exa)
@@ -625,38 +673,7 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
                     "status": "error",
                     "message": f"Tavily unexpected error: {e}",
                 }
-            providers.append(tavily_meta)
-            if tavily_meta.get("status") == "ok":
-                any_ok = True
-                batches.append(tavily_results)
-                if tavily_images:
-                    image_batches.append(tavily_images)
-            else:
-                any_error = True
-
-            try:
-                r_results, r_meta, r_images = jobs["tavily_runway"].result()
-                r_meta = dict(r_meta)
-                r_meta["provider"] = "tavily_runway"
-                r_meta["message"] = (
-                    f"Tavily runway-focus returned {r_meta.get('count', len(r_results))} result(s)."
-                    if r_meta.get("status") == "ok"
-                    else r_meta.get("message", "Tavily runway-focus failed.")
-                )
-                providers.append(r_meta)
-                if r_meta.get("status") == "ok":
-                    any_ok = True
-                    batches.append(r_results)
-                    if r_images:
-                        image_batches.append(r_images)
-            except Exception as e:
-                providers.append(
-                    {
-                        "provider": "tavily_runway",
-                        "status": "error",
-                        "message": f"Tavily runway-focus unexpected error: {e}",
-                    }
-                )
+            _ingest(tavily_meta, tavily_results, tavily_images)
         else:
             providers.append(
                 {
@@ -676,14 +693,7 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
                     "status": "error",
                     "message": f"Exa unexpected error: {e}",
                 }
-            providers.append(exa_meta)
-            if exa_meta.get("status") == "ok":
-                any_ok = True
-                batches.append(exa_results)
-                if exa_images:
-                    image_batches.append(exa_images)
-            else:
-                any_error = True
+            _ingest(exa_meta, exa_results, exa_images)
         else:
             providers.append(
                 {
@@ -692,6 +702,36 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
                     "message": "Set EXA_API_KEY to enable Exa neural search.",
                 }
             )
+
+    # Phase 2: runway only if we still need more images.
+    image_count = _count_images_so_far()
+    if TAVILY_API_KEY and image_count < 8:
+        try:
+            r_results, r_meta, r_images = _run_tavily_runway()
+            r_meta = dict(r_meta)
+            r_meta["provider"] = "tavily_runway"
+            r_meta["message"] = (
+                f"Tavily runway-focus returned {r_meta.get('count', len(r_results))} result(s)."
+                if r_meta.get("status") == "ok"
+                else r_meta.get("message", "Tavily runway-focus failed.")
+            )
+            _ingest(r_meta, r_results, r_images)
+        except Exception as e:
+            providers.append(
+                {
+                    "provider": "tavily_runway",
+                    "status": "error",
+                    "message": f"Tavily runway-focus unexpected error: {e}",
+                }
+            )
+    elif TAVILY_API_KEY:
+        providers.append(
+            {
+                "provider": "tavily_runway",
+                "status": "skipped",
+                "message": "skipped; enough images from main+exa",
+            }
+        )
 
     # Soft cap merge limit a bit higher so runway pass can contribute.
     results = _merge_by_url(batches, max(1, int(limit) + 4))
@@ -728,7 +768,7 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
     else:
         overall = "needs_credentials"
 
-    return {
+    payload = {
         "status": overall,
         "query": q,
         "visual_query": visual_q,
@@ -736,4 +776,11 @@ def search_web(q: str, limit: int = 8) -> dict[str, Any]:
         "results": results[: max(1, int(limit))],
         "images": images,
         "providers": providers,
+        "cached": False,
     }
+
+    with _SEARCH_CACHE_LOCK:
+        # Store a shallow copy without mutating caller's view later.
+        _SEARCH_CACHE[cache_key] = (time.monotonic(), dict(payload))
+
+    return payload
