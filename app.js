@@ -617,6 +617,7 @@
   const phaseDiscovery = $("#phaseDiscovery");
   const phaseReport = $("#phaseReport");
   const phaseArchive = $("#phaseArchive");
+  const phaseOrbit = $("#phaseOrbit");
   const searchForm = $("#searchForm");
   const searchInput = $("#searchInput");
   const queryDisplay = $("#queryDisplay");
@@ -1455,6 +1456,7 @@
       hide(phaseDiscovery);
       hide(phaseReport);
       hide(phaseArchive);
+      if (phaseOrbit) hide(phaseOrbit);
       show(phaseScan);
       window.scrollTo(0, 0);
 
@@ -2849,10 +2851,12 @@
   function resetToLanding() {
     killTimeline();
     closeDetail();
+    if (typeof closeOrbitMode === "function") closeOrbitMode({ silent: true });
     hide(phaseScan);
     hide(phaseDiscovery);
     hide(phaseReport);
     hide(phaseArchive);
+    hide(phaseOrbit);
     show(landing);
     window.scrollTo(0, 0);
     searchInput.focus();
@@ -2873,6 +2877,399 @@
       ease: "power3.out",
       delay: 0.1,
     });
+  }
+
+
+  // --- Orbit mode (Atelier-style category ring) -----------------
+  const ORBIT_CATEGORIES = [
+    { id: "tops", en: "Tops", zh: "上衣", query: "Women's Tops Trends" },
+    { id: "shirts-blouses", en: "Shirts & Blouses", zh: "衬衫与罩衫", query: "Women's Shirts & Blouses Trends" },
+    { id: "knitwear", en: "Knitwear", zh: "针织", query: "Women's Knitwear Trends" },
+    { id: "jackets", en: "Jackets", zh: "夹克", query: "Women's Jacket Trends" },
+    { id: "coats", en: "Coats", zh: "大衣", query: "Women's Coat Trends" },
+    { id: "trousers", en: "Trousers", zh: "裤装", query: "Women's Trousers Trends" },
+    { id: "skirts", en: "Skirts", zh: "裙装", query: "Women's Skirt Trends" },
+    { id: "dresses", en: "Dresses", zh: "连衣裙", query: "Women's Dress Trends" },
+    { id: "denim", en: "Denim", zh: "牛仔", query: "Women's Denim Trends" },
+    { id: "tailoring", en: "Tailoring", zh: "正装裁剪", query: "Women's Tailoring Trends" },
+    { id: "sportswear", en: "Sportswear", zh: "运动装", query: "Women's Sportswear Trends" },
+    { id: "swimwear", en: "Swimwear", zh: "泳装", query: "Women's Swimwear Trends" },
+    { id: "resortwear", en: "Resortwear", zh: "度假装", query: "Women's Resortwear Trends" },
+    { id: "accessories", en: "Accessories", zh: "配饰", query: "Women's Accessories Trends" },
+  ];
+
+  let orbitState = null;
+  const THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.min.js";
+
+  async function ensureThree() {
+    if (typeof window.THREE !== "undefined" && window.THREE.WebGLRenderer) return true;
+    try {
+      const mod = await import(THREE_CDN);
+      window.THREE = mod;
+      return !!(mod && mod.WebGLRenderer);
+    } catch (err) {
+      console.warn("THREE load failed", err);
+      return false;
+    }
+  }
+
+  function makeSlabTexture(zh, en) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, 256, 512);
+    // translucent cream panel
+    ctx.fillStyle = "rgba(232, 223, 208, 0.06)";
+    ctx.fillRect(24, 48, 208, 416);
+    ctx.strokeStyle = "rgba(232, 223, 208, 0.55)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(24.5, 48.5, 207, 415);
+    // inner hairline
+    ctx.strokeStyle = "rgba(232, 223, 208, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(36.5, 60.5, 183, 391);
+    // vertical label (rotated)
+    ctx.save();
+    ctx.translate(128, 256);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = "rgba(245, 240, 232, 0.95)";
+    ctx.font = "500 34px 'Cormorant Garamond', Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(zh, 0, -10);
+    ctx.fillStyle = "rgba(245, 240, 232, 0.45)";
+    ctx.font = "400 14px Inter, system-ui, sans-serif";
+    ctx.fillText(en.toUpperCase(), 0, 28);
+    ctx.restore();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function disposeOrbit() {
+    if (!orbitState) return;
+    const s = orbitState;
+    cancelAnimationFrame(s.raf);
+    window.removeEventListener("resize", s.onResize);
+    if (s.canvas) {
+      s.canvas.removeEventListener("pointerdown", s.onPointerDown);
+      s.canvas.removeEventListener("pointermove", s.onPointerMove);
+      s.canvas.removeEventListener("pointerup", s.onPointerUp);
+      s.canvas.removeEventListener("pointercancel", s.onPointerUp);
+      s.canvas.removeEventListener("pointerleave", s.onPointerUp);
+      s.canvas.removeEventListener("click", s.onClick);
+    }
+    if (s.renderer) {
+      s.renderer.dispose();
+      s.renderer.forceContextLoss?.();
+    }
+    if (s.scene) {
+      s.scene.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          });
+        }
+      });
+    }
+    orbitState = null;
+  }
+
+  function buildOrbitFallback() {
+    const list = document.getElementById("orbitFallbackList");
+    const fallback = document.getElementById("orbitFallback");
+    const canvas = document.getElementById("orbitCanvas");
+    if (!list || !fallback) return;
+    list.innerHTML = "";
+    ORBIT_CATEGORIES.forEach((cat) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.innerHTML =
+        `<span class="orbit-fallback-zh">${cat.zh}</span>` +
+        `<span class="orbit-fallback-en">${cat.en}</span>`;
+      btn.addEventListener("click", () => confirmOrbitCategory(cat));
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    fallback.hidden = false;
+    if (canvas) canvas.style.display = "none";
+    const stage = document.getElementById("orbitStage");
+    if (stage) stage.style.cursor = "default";
+    const hint = document.getElementById("orbitHint");
+    if (hint) hint.textContent = "点击品类开始搜索";
+  }
+
+  function initOrbitScene() {
+    const canvas = document.getElementById("orbitCanvas");
+    const stage = document.getElementById("orbitStage");
+    const azimuthEl = document.getElementById("orbitAzimuth");
+    const fallback = document.getElementById("orbitFallback");
+    if (!canvas || !stage || typeof THREE === "undefined") {
+      buildOrbitFallback();
+      return;
+    }
+    if (fallback) fallback.hidden = true;
+    canvas.style.display = "block";
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.035);
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
+    camera.position.set(0, 0.35, 9.2);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
+    renderer.setClearColor(0x000000, 1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    const root = new THREE.Group();
+    scene.add(root);
+
+    // Starfield
+    {
+      const count = 900;
+      const pos = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const r = 18 + Math.random() * 40;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.55;
+        pos[i * 3 + 2] = r * Math.cos(phi);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xe8dfd0,
+        size: 0.035,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        sizeAttenuation: true,
+      });
+      scene.add(new THREE.Points(geo, mat));
+    }
+
+    // Nucleus particle sphere
+    {
+      const count = 2200;
+      const pos = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const u = Math.random();
+        const v = Math.random();
+        const theta = 2 * Math.PI * u;
+        const phi = Math.acos(2 * v - 1);
+        const r = 1.55 * Math.cbrt(Math.random());
+        pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        pos[i * 3 + 2] = r * Math.cos(phi);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xe8dfd0,
+        size: 0.028,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        sizeAttenuation: true,
+      });
+      root.add(new THREE.Points(geo, mat));
+    }
+
+    // Soft wireframe cylinder
+    {
+      const cyl = new THREE.CylinderGeometry(3.55, 3.55, 3.4, 48, 1, true);
+      const edges = new THREE.EdgesGeometry(cyl, 18);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({
+          color: 0xe8dfd0,
+          transparent: true,
+          opacity: 0.18,
+        })
+      );
+      root.add(line);
+    }
+
+    // Orbiting category slabs
+    const slabMeshes = [];
+    const radius = 3.55;
+    const n = ORBIT_CATEGORIES.length;
+    ORBIT_CATEGORIES.forEach((cat, i) => {
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const tex = makeSlabTexture(cat.zh, cat.en);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.55), mat);
+      mesh.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      mesh.lookAt(0, 0, 0);
+      mesh.rotateY(Math.PI); // face outward
+      mesh.userData.category = cat;
+      root.add(mesh);
+      slabMeshes.push(mesh);
+
+      // thin wire box accent
+      const box = new THREE.BoxGeometry(0.74, 1.58, 0.04);
+      const wire = new THREE.LineSegments(
+        new THREE.EdgesGeometry(box),
+        new THREE.LineBasicMaterial({
+          color: 0xe8dfd0,
+          transparent: true,
+          opacity: 0.35,
+        })
+      );
+      wire.position.copy(mesh.position);
+      wire.quaternion.copy(mesh.quaternion);
+      root.add(wire);
+    });
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const state = {
+      scene,
+      camera,
+      renderer,
+      root,
+      canvas,
+      slabMeshes,
+      raycaster,
+      pointer,
+      azimuth: 0,
+      targetAzimuth: 0,
+      dragging: false,
+      dragMoved: false,
+      lastX: 0,
+      raf: 0,
+      onResize: null,
+      onPointerDown: null,
+      onPointerMove: null,
+      onPointerUp: null,
+      onClick: null,
+    };
+
+    function resize() {
+      const w = stage.clientWidth || window.innerWidth;
+      const h = stage.clientHeight || window.innerHeight;
+      camera.aspect = w / Math.max(h, 1);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+    state.onResize = resize;
+    resize();
+    window.addEventListener("resize", resize);
+
+    state.onPointerDown = (e) => {
+      state.dragging = true;
+      state.dragMoved = false;
+      state.lastX = e.clientX;
+      stage.classList.add("is-dragging");
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+    };
+    state.onPointerMove = (e) => {
+      if (!state.dragging) return;
+      const dx = e.clientX - state.lastX;
+      if (Math.abs(dx) > 2) state.dragMoved = true;
+      state.lastX = e.clientX;
+      state.targetAzimuth += dx * 0.0055;
+    };
+    state.onPointerUp = (e) => {
+      state.dragging = false;
+      stage.classList.remove("is-dragging");
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+    };
+    state.onClick = (e) => {
+      if (state.dragMoved) return;
+      const rect = canvas.getBoundingClientRect();
+      state.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      state.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      state.raycaster.setFromCamera(state.pointer, camera);
+      const hits = state.raycaster.intersectObjects(state.slabMeshes, false);
+      if (hits.length && hits[0].object.userData.category) {
+        confirmOrbitCategory(hits[0].object.userData.category);
+      }
+    };
+
+    canvas.addEventListener("pointerdown", state.onPointerDown);
+    canvas.addEventListener("pointermove", state.onPointerMove);
+    canvas.addEventListener("pointerup", state.onPointerUp);
+    canvas.addEventListener("pointercancel", state.onPointerUp);
+    canvas.addEventListener("click", state.onClick);
+
+    function tick() {
+      state.raf = requestAnimationFrame(tick);
+      // gentle idle drift when not dragging
+      if (!state.dragging) state.targetAzimuth += 0.0012;
+      state.azimuth += (state.targetAzimuth - state.azimuth) * 0.12;
+      root.rotation.y = state.azimuth;
+      // keep slabs upright-ish facing camera azimuth
+      const deg = ((state.azimuth * 180) / Math.PI) % 360;
+      if (azimuthEl) {
+        const shown = ((deg % 360) + 360) % 360;
+        azimuthEl.textContent = `${shown.toFixed(0)}°`;
+      }
+      renderer.render(scene, camera);
+    }
+    orbitState = state;
+    tick();
+  }
+
+  async function openOrbitMode() {
+    if (!phaseOrbit) return;
+    hide(landing);
+    hide(phaseScan);
+    hide(phaseDiscovery);
+    hide(phaseReport);
+    hide(phaseArchive);
+    show(phaseOrbit);
+    window.scrollTo(0, 0);
+    disposeOrbit();
+    if (reducedMotion) {
+      buildOrbitFallback();
+      return;
+    }
+    const ok = await ensureThree();
+    if (!ok) {
+      buildOrbitFallback();
+      return;
+    }
+    requestAnimationFrame(() => initOrbitScene());
+  }
+
+  function closeOrbitMode(opts = {}) {
+    disposeOrbit();
+    if (phaseOrbit) hide(phaseOrbit);
+    if (!opts.silent) {
+      show(landing);
+      window.scrollTo(0, 0);
+    }
+  }
+
+  function confirmOrbitCategory(cat) {
+    if (!cat) return;
+    const q = cat.query || `Women's ${cat.en} Trends`;
+    if (searchInput) searchInput.value = q;
+    closeOrbitMode({ silent: true });
+    hide(landing);
+    runPipeline(q);
   }
 
   // --- Events ---------------------------------------------------
@@ -2907,8 +3304,20 @@
   detailOverlay.addEventListener("click", (e) => {
     if (e.target === detailOverlay) closeDetail();
   });
+  document.getElementById("btnOrbitMode")?.addEventListener("click", () => {
+    openOrbitMode();
+  });
+  document.getElementById("btnOrbitClose")?.addEventListener("click", () => {
+    closeOrbitMode();
+  });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDetail();
+    if (e.key !== "Escape") return;
+    if (phaseOrbit && !phaseOrbit.hidden) {
+      closeOrbitMode();
+      return;
+    }
+    closeDetail();
   });
 
   // Init — probe API immediately; runPipeline/fetchSearch await apiReady
